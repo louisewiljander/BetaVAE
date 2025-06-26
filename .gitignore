@@ -1,0 +1,28 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env/
+
+# Model outputs and experiment results
+results/
+*.pt
+*.pth
+*.h5
+*.ckpt
+*.log
+train_losses.log
+
+# Wandb logs
+wandb/
+
+# System files
+.DS_Store
+
+# VS Code settings
+.vscode/
