@@ -26,3 +26,4 @@ wandb/
 
 # VS Code settings
 .vscode/
+.env
