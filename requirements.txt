@@ -8,9 +8,10 @@ pandas
 seaborn
 Pillow
 tqdm
-sklearn
+scikit-learn
 umap-learn
 opentsne
 wandb
 h5py
 plotly
+numpy<2.0
