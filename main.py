@@ -133,7 +133,12 @@ def main(args):
             print(f"Authentication for WANDB failed! Trying to disable it")
             os.environ["WANDB_MODE"] = "disabled"
 
-    wandb.init(project='atmlbetavae', entity='atml', group="jonas")
+    run_name = f"{args.model_type}_z{args.latent_dim}_b{args.loss_b}_epochs{args.epochs}"
+    wandb.init(
+        project=os.environ.get("WANDB_PROJECT", None),
+        entity=os.environ.get("WANDB_ENTITY", None),
+        name=run_name
+    )
     wandb.config.update(args)
     
     formatter = logging.Formatter('%(asctime)s %(levelname)s - %(funcName)s: %(message)s',
