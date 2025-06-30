@@ -133,7 +133,7 @@ def main(args):
             print(f"Authentication for WANDB failed! Trying to disable it")
             os.environ["WANDB_MODE"] = "disabled"
 
-    run_name = f"{args.model_type}_z{args.latent_dim}_b{args.loss_b}_epochs{args.epochs}"
+    run_name = f"{args.model_type}_z={args.latent_dim}_beta={args.loss_b}_epochs={args.epochs}"
     wandb.init(
         project=os.environ.get("WANDB_PROJECT", None),
         entity=os.environ.get("WANDB_ENTITY", None),
