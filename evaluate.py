@@ -81,8 +81,9 @@ class Evaluator():
         accuracies, aam, mig, fid = None, None, None, None
         #TODO: dont run if on collab
         
-        if dataset_name != '3dshapes' and dataset_name != 'mpi3dtoy' and dataset_name != 'dsprites':
-            fid = get_fid_value(dataloader, self.model, batch_size=dataloader.batch_size)
+        ### Commented out code for FID computation, uncomment if needed ###
+        #if dataset_name != '3dshapes' and dataset_name != 'mpi3dtoy' and dataset_name != 'dsprites':
+            #fid = get_fid_value(dataloader, self.model, batch_size=dataloader.batch_size)
         
         if dataset_name in ['dsprites', 'mpi3dtoy', '3dshapes']: 
             self.logger.info("Computing the disentanglement metric")
@@ -131,8 +132,6 @@ class Evaluator():
         print(f"Evaluated metrics for {dataset_name} as: {metrics}")
         self.model.train()
         return metrics
-
-        
         
 
     def _disentanglement_metric(self, dataset, method_names, sample_size, n_epochs=6000, dataset_size = 1000, hidden_dim = 256, use_non_linear = False):
@@ -143,28 +142,6 @@ class Evaluator():
         for method_name in tqdm(method_names, desc="Iterating over methods for the Higgins disentanglement metric"):
             if method_name == "VAE":
                 methods["VAE"] = self.model
-
-            elif method_name == "ICA":
-                start = time.time()
-                print("Training ICA...")
-                ica = decomposition.FastICA(n_components=self.model.latent_dim, max_iter=400, random_state=self.seed)
-                if dataset.imgs.ndim == 4:
-                    data_imgs = dataset.imgs[:,:,:,:]
-                    print(f"Shape of data images: {data_imgs.shape}")
-                    imgs_ica = np.reshape(data_imgs, (data_imgs.shape[0], data_imgs.shape[3]*data_imgs.shape[1]**2))
-                else:
-                    data_imgs = dataset.imgs 
-                    imgs_ica = np.reshape(dataset.imgs, (data_imgs.shape[0], data_imgs.shape[1]**2))
-                size = min(1000 if (len(data_imgs.shape) > 3 and data_imgs.shape[3]) > 1 else 2500, len(imgs_ica))
-                idx = np.random.randint(len(imgs_ica), size = size)
-                imgs_ica = imgs_ica[idx, :]       #not enough memory for full dataset -> repeat with random subsets 
-                ica.fit(imgs_ica)
-                methods["ICA"] = ica
-                
-                self.logger.info("Done")
-
-                runtimes[method_name] = time.time()-start
-
 
             else: 
                 raise ValueError("Unknown method : {}".format(method_name))
@@ -332,19 +309,6 @@ class Evaluator():
                     if not self.use_NN_classifier:
                         mu1 = mu1.cpu().detach().numpy()
                         mu2 = mu2.cpu().detach().numpy()  
-            elif method == "ICA":
-                ica = methods[method]
-                #flatten images
-                if dataset.imgs.ndim == 4:
-                    imgs_sampled_ica1 = torch.reshape(imgs_sampled1, (imgs_sampled1.shape[0], imgs_sampled1.shape[1]*imgs_sampled1.shape[2]**2))
-                    imgs_sampled_ica2 = torch.reshape(imgs_sampled2, (imgs_sampled2.shape[0], imgs_sampled2.shape[1]*imgs_sampled2.shape[2]**2))
-                else:   
-                   imgs_sampled_ica1 = torch.reshape(imgs_sampled1, (imgs_sampled1.shape[0], imgs_sampled1.shape[2]**2))
-                   imgs_sampled_ica2 = torch.reshape(imgs_sampled2, (imgs_sampled2.shape[0], imgs_sampled2.shape[2]**2))
-                
-                mu1 = ica.transform(imgs_sampled_ica1)
-                mu2 = ica.transform(imgs_sampled_ica2)
-
                 
             else: 
                 raise ValueError("Unknown method : {}".format(method)) 
