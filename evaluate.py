@@ -86,7 +86,7 @@ class Evaluator():
         
         if dataset_name in ['dsprites', 'mpi3dtoy', '3dshapes']: 
             self.logger.info("Computing the disentanglement metric")
-            method_names = ["VAE", "PCA", "ICA"]
+            method_names = ["VAE", "ICA"]
             if self.multiple_l is False:
                 accuracies = self._disentanglement_metric(dataloader.dataset, method_names, sample_size=self.sample_size, n_epochs = 10000, dataset_size=self.dataset_size)
             else:
@@ -143,28 +143,6 @@ class Evaluator():
         for method_name in tqdm(method_names, desc="Iterating over methods for the Higgins disentanglement metric"):
             if method_name == "VAE":
                 methods["VAE"] = self.model
-
-            elif method_name == "PCA":   
-                start = time.time()
-                print("Training PCA...")
-                pca = decomposition.PCA(n_components=self.model.latent_dim, whiten = True, random_state=self.seed)
-                if dataset.imgs.ndim == 4:
-                    data_imgs = dataset.imgs[:,:,:,:]
-                    print(f"Shape of data images: {data_imgs.shape}")
-                    imgs_pca = np.reshape(data_imgs, (data_imgs.shape[0], data_imgs.shape[3]*data_imgs.shape[1]**2))
-                else:
-                    data_imgs = dataset.imgs 
-                    imgs_pca = np.reshape(dataset.imgs, (data_imgs.shape[0], data_imgs.shape[1]**2))
-                size = min(3500 if (len(data_imgs.shape) > 3 and data_imgs.shape[3]) > 1 else 25000, len(imgs_pca))
-
-                idx = np.random.randint(len(imgs_pca), size = size)
-                imgs_pca = imgs_pca[idx, :]       #not enough memory for full dataset -> repeat with random subsets               
-                pca.fit(imgs_pca)
-                methods["PCA"] = pca
-                
-                self.logger.info("Done")
-
-                runtimes[method_name] = time.time()-start
 
             elif method_name == "ICA":
                 start = time.time()
@@ -354,19 +332,6 @@ class Evaluator():
                     if not self.use_NN_classifier:
                         mu1 = mu1.cpu().detach().numpy()
                         mu2 = mu2.cpu().detach().numpy()  
-            elif method == "PCA":
-                pca = methods[method]
-                #flatten images
-                if dataset.imgs.ndim == 4:
-                    imgs_sampled_pca1 = torch.reshape(imgs_sampled1, (imgs_sampled1.shape[0], imgs_sampled1.shape[1]*imgs_sampled1.shape[2]**2))
-                    imgs_sampled_pca2 = torch.reshape(imgs_sampled2, (imgs_sampled2.shape[0], imgs_sampled2.shape[1]*imgs_sampled2.shape[2]**2))
-                else:
-                    imgs_sampled_pca1 = torch.reshape(imgs_sampled1, (imgs_sampled1.shape[0], imgs_sampled1.shape[2]**2))
-                    imgs_sampled_pca2 = torch.reshape(imgs_sampled2, (imgs_sampled2.shape[0], imgs_sampled2.shape[2]**2))
-                
-                mu1 = pca.transform(imgs_sampled_pca1)
-                mu2 = pca.transform(imgs_sampled_pca2)
-
             elif method == "ICA":
                 ica = methods[method]
                 #flatten images

@@ -10,7 +10,6 @@ Pillow
 tqdm
 scikit-learn
 umap-learn
-opentsne
 wandb
 h5py
 plotly

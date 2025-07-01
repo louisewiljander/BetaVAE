@@ -1,12 +1,6 @@
 import wandb
 import os
 import itertools
-from sklearn.cluster import KMeans
-from sklearn import manifold
-from sklearn import decomposition
-from openTSNE import TSNE
-import sklearn.metrics
-from tqdm import tqdm
 import torch
 import itertools
 import matplotlib.pyplot as plt
@@ -93,7 +87,7 @@ def latent_viz(model, loader, dataset_name, raw_dataset, steps=75, device='cuda'
         n_classes = 100
 
     if method == "all":
-        method = ["tsne", "densumap", "pca"]
+        method = ["densumap"]
     if type(method) is str:
         method = [method] # For consistent iteration later
 
@@ -143,19 +137,13 @@ def latent_viz(model, loader, dataset_name, raw_dataset, steps=75, device='cuda'
         plots = {}
         dim_reduction_models = {}
         for viz in tqdm(method, desc="Iterating over dim. reduction methods"):
-            if viz == 'tsne':
-                dim_reduction_model = TSNE(n_components=2, random_state=seed).fit(np.array(list(itertools.chain.from_iterable(post_samples_viz))))
-                dim_reduction_samples = dim_reduction_model.transform(np.array(list(itertools.chain.from_iterable(post_samples_viz))))
-            elif viz == "densumap":
+            if viz == "densumap":
                 flat_samples = [np.array(single_class)
                     for single_class in post_samples_viz] # UMAP doesnt support CHW data shape but it must be flat
                 flat_samples = np.concatenate(flat_samples)
                 dim_reduction_model = umap.UMAP(random_state=seed, densmap=True, n_components=2).fit(flat_samples)
                 dim_reduction_samples = dim_reduction_model.embedding_
 
-            elif viz == "pca":
-                dim_reduction_model = decomposition.PCA(n_components=2, random_state=seed)
-                dim_reduction_samples = dim_reduction_model.fit_transform(list(itertools.chain.from_iterable(post_samples_viz)))
             plot = graph_latent_samples(dim_reduction_samples, true_labels)
             dim_reduction_models[viz] = dim_reduction_model
             plots[viz] = plot
