@@ -567,20 +567,20 @@ class Chairs(datasets.ImageFolder):
 
 class MNIST(datasets.MNIST):
     """Mnist wrapper. Docs: `datasets.MNIST.`"""
-    img_size = (1, 32, 32)
+    img_size = (1, 64, 64)
     background_color = COLOUR_BLACK
     def __init__(self, root=os.path.join(DIR, '../data/mnist'), **kwargs):
         super().__init__(root,
                          train=True,
                          download=True,
                          transform=transforms.Compose([
-                             transforms.Resize(32),
+                             transforms.Resize(64),
                              transforms.ToTensor()
                          ]))
 
 class CIFAR10(datasets.CIFAR10):
     """CIFAR10 wrapper"""
-    img_size = (3, 32, 32)
+    img_size = (3, 64, 64)
     background_color = COLOUR_BLACK
     
     def __init__(self, root=os.path.join(DIR, '../data/cifar10'), **kwargs):
@@ -588,13 +588,13 @@ class CIFAR10(datasets.CIFAR10):
                          train=True,
                          download=True,
                          transform=transforms.Compose([
-                             transforms.Resize(32),
+                             transforms.Resize(64),
                              transforms.ToTensor()
                          ]))
 
 class CIFAR100(datasets.CIFAR100):
     """CIFAR100 wrapper"""
-    img_size = (3, 32, 32)
+    img_size = (3, 64, 64)
     background_color = COLOUR_BLACK
     
     def __init__(self, root=os.path.join(DIR, '../data/cifar100'), **kwargs):
@@ -602,20 +602,20 @@ class CIFAR100(datasets.CIFAR100):
                          train=True,
                          download=True,
                          transform=transforms.Compose([
-                             transforms.Resize(32),
+                             transforms.Resize(64),
                              transforms.ToTensor()
                          ]))
 
 class FashionMNIST(datasets.FashionMNIST):
     """Fashion Mnist wrapper. Docs: `datasets.FashionMNIST.`"""
-    img_size = (1, 32, 32)
+    img_size = (1, 64, 64)
     background_color = COLOUR_BLACK
     def __init__(self, root=os.path.join(DIR, '../data/fashionMnist'), **kwargs):
         super().__init__(root,
                          train=True,
                          download=True,
                          transform=transforms.Compose([
-                             transforms.Resize(32),
+                             transforms.Resize(64),
                              transforms.ToTensor()
                          ]))
 
