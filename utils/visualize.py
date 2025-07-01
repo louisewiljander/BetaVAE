@@ -299,15 +299,13 @@ class Visualizer():
         n_latents = n_latents if n_latents is not None else self.model.latent_dim
         latent_samples = [self._traverse_line(dim, n_per_latent, data=data).detach().numpy()
                           for dim in range(self.latent_dim)]
-        
+        # Only support emb_model with fit_transform or transform (e.g. UMAP)
         if hasattr(emb_model, "fit_transform"):
-
-            tsne_latents = emb_model.fit_transform(list(itertools.chain.from_iterable(latent_samples)))
+            emb_latents = emb_model.fit_transform(list(itertools.chain.from_iterable(latent_samples)))
         else:
-            tsne_latents = emb_model.transform(np.array(list(itertools.chain.from_iterable(latent_samples))))
-
+            emb_latents = emb_model.transform(np.array(list(itertools.chain.from_iterable(latent_samples))))
         true_labels = [[i]*n_per_latent for i in range(n_latents)]
-        plot = graph_latent_samples(tsne_latents, true_labels)
+        plot = graph_latent_samples(emb_latents, true_labels)
         return plot
 
     def reconstruct_traverse(self, data,
