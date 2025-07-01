@@ -22,7 +22,7 @@ from utils.helpers import *
 from training import Trainer, save_model
 from evaluate import Evaluator
 from utils.visualize import Visualizer, GifTraversalsTraining
-from utils.viz_new_plots import wandb_auth, latent_viz
+from utils.viz_new_plots import wandb_auth
 from utils.viz_helpers import get_samples
 from utils.beta_schedules import linear_beta_schedule
 
@@ -100,7 +100,7 @@ def parse_arguments(args_to_parse):
         help='Whether to use 5 or 4 latents in Dsprites')      
     training.add_argument('--loss-b', type=float, default=1.,
         help='beta factor for loss')
-    training.add_argument('--beta_start', type=float, default=5., help='Initial beta value for annealing.')
+    training.add_argument('--beta_start', type=float, default=1., help='Initial beta value for annealing.')
     training.add_argument('--beta_end', type=float, default=1., help='Final beta value for annealing.')
     training.add_argument('--beta_anneal_epochs', type=int, default=None, help='Number of epochs over which to anneal beta. If None, will use total number of epochs.')
     training.add_argument('--multiple_l', type=lambda x: False if x in ["False", "false", "", "None", "0"] else True, default=False,
@@ -143,7 +143,16 @@ def main(args):
             print(f"Authentication for WANDB failed! Trying to disable it")
             os.environ["WANDB_MODE"] = "disabled"
 
-    run_name = f"{args.model_type}_z={args.latent_dim}_beta={args.loss_b}_epochs={args.epochs}"
+    # Dynamic wandb run naming
+    if args.beta_start == 1.0 and args.beta_end == 1.0:
+        run_name = f"StandardVAE_{args.dataset}_z={args.latent_dim}_epochs={args.epochs}"
+    elif args.beta_start == args.beta_end and args.beta_start > 1.0:
+        run_name = f"BetaVAE_beta={args.beta_start}_{args.dataset}_z={args.latent_dim}_epochs={args.epochs}"
+    elif args.beta_start > 1.0 and args.beta_end == 1.0:
+        run_name = f"AnnealedBeta_beta={args.beta_start}_to_1_{args.dataset}_z={args.latent_dim}_epochs={args.epochs}"
+    else:
+        run_name = f"VAE_beta={args.beta_start}_to_{args.beta_end}_{args.dataset}_z={args.latent_dim}_epochs={args.epochs}"
+
     wandb.init(
         project=os.environ.get("WANDB_PROJECT", None),
         entity=os.environ.get("WANDB_ENTITY", None),
@@ -212,11 +221,12 @@ def main(args):
         trainer(train_loader, epochs=args.epochs, wandb_log= args.wandb_log)
 
         latents_plots, traversal_plots, dim_reduction_models = {}, {}, {}
-         
+    
         try:
-            latents_plots, latent_data, dim_reduction_models = latent_viz(model, train_loader, args.dataset, raw_dataset=raw_dataset, steps=100, device=device)
+            # Remove latent_viz and dim_reduction_models (PCA/tSNE) code
+            pass
         except:
-            print("Failed to run latent viz code")
+            pass
     
         viz = Visualizer(model=model,
                     model_dir=exp_dir,
@@ -227,8 +237,7 @@ def main(args):
 
         traversal_plots = {}
         base_datum = next(iter(train_loader))[0][0].unsqueeze(dim=0)
-        for model_name, viz_model in dim_reduction_models.items():
-            traversal_plots[model_name] = viz.latents_traversal_plot(viz_model, data=base_datum, n_per_latent=50)
+        # Remove traversal_plots using dim_reduction_models
 
         # Original plots from the repo
         size = (args.n_rows, args.n_cols)
