@@ -182,7 +182,14 @@ def main(args):
         img_size = train_loader.dataset.img_size
         beta = args.loss_b
 
-        model = eval("{model}({latent_dim}, {beta}, {img_size}, latent_dist = 'bernoulli')".format(model = args.model_type, latent_dim = args.latent_dim, beta = beta, img_size = img_size))
+        # Set beta for model initialization: use beta_start if annealing, else loss_b
+        if args.beta_anneal_epochs is not None:
+            beta = args.beta_start
+        else:
+            beta = args.loss_b
+
+        model = eval("{model}({latent_dim}, {beta}, {img_size}, latent_dist = 'bernoulli')".format(
+            model=args.model_type, latent_dim=args.latent_dim, beta=beta, img_size=img_size))
     
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = model.to(device)
