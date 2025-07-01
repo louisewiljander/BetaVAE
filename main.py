@@ -1,3 +1,10 @@
+"""
+main.py
+-------
+Entry point for running training or evaluation experiments with Beta-VAE models.
+Handles argument parsing, configuration, and launching the appropriate workflow.
+"""
+
 import yaml
 import logging
 import argparse
@@ -287,4 +294,4 @@ def main(args):
    
 if __name__ == '__main__':
     args = parse_arguments(sys.argv[1:])
-    main(args) 
+    main(args)

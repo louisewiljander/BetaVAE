@@ -1,3 +1,10 @@
+"""
+base.py
+-------
+Defines the BaseVAE class, an abstract base class for all VAE models in this project.
+Provides the required interface for encoding, decoding, sampling, and loss computation.
+"""
+
 from .types_ import *
 from torch import nn
 from abc import abstractmethod
@@ -28,4 +35,4 @@ class BaseVAE(nn.Module):
         pass
 
     def get_device(self):
-        return next(self.parameters()).device 
+        return next(self.parameters()).device
