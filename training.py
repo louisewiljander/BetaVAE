@@ -110,7 +110,9 @@ class Trainer():
                     self.optimizer.zero_grad()
                     recon_batch, mu, logvar = self.model(data)
 
-                    loss = self.model.loss_function(recon_batch, data, mu,logvar, storer=storer)/len(data)
+                    # Unpack loss tuple and use only the total loss for backward
+                    loss, recon_loss, kl_loss = self.model.loss_function(recon_batch, data, mu,logvar, storer=storer)
+                    loss = loss / len(data)
                     loss.backward()
                     self.optimizer.step()
 
@@ -220,7 +222,7 @@ class LossesLogger(object):
             os.remove(file_path_name)
         # Write CSV header
         with open(file_path_name, "w") as f:
-            f.write("Epoch,LossType,Value\n")  # Updated header
+            f.write("Epoch,Loss,Value\n")
 
         self.file_path_name = file_path_name
 
