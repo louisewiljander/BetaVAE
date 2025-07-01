@@ -144,11 +144,28 @@ class Trainer():
                 if "loss" in storer:
                     elbo = mean(storer["loss"])
                     wandb.log({"epoch": epoch, "elbo": elbo, "beta": getattr(self.model, "beta", None)})
-                # ...existing code for metrics/losses...
+                
                 if epoch % max(round(epochs/abs(self.metrics_freq)), 10) == 0 and abs(epoch-epochs) >= 5 and (epoch != 0 if self.metrics_freq < 0 else True):
                     metrics = train_evaluator.compute_metrics(data_loader, self.dataset_name)
                 losses = train_evaluator.compute_losses(data_loader, batch_size=batch_size)
                 wandb.log({"epoch":epoch,"metric":metrics, "loss":losses})
+
+                ### Log standard ELBO (beta=1) on training data, no gradients ###
+                original_beta = self.model.beta
+                self.model.beta = 1.0
+                standard_elbo_results = self.evaluate_no_grad(data_loader)
+                self.model.beta = original_beta
+
+                import numpy as np
+                mean_standard_elbo = np.mean([r['loss'] for r in standard_elbo_results])
+                mean_recon = np.mean([r['recon_loss'] for r in standard_elbo_results])
+                mean_kl = np.mean([r['kl_loss'] for r in standard_elbo_results])
+                wandb.log({
+                    "epoch": epoch,
+                    "standard_elbo": mean_standard_elbo,
+                    "standard_recon_loss": mean_recon,
+                    "standard_kl_loss": mean_kl
+                })
 
             self.model.train()           
 
@@ -161,7 +178,7 @@ class Trainer():
         self.logger.info('Finished training after {:.1f} min.'.format(delta_time))
 
 
-    # For evaluation/testing without gradients:
+    ### Added method for evaluation/testing without gradients: ###
     def evaluate_no_grad(self, data_loader):
         """
         Evaluate model on data_loader without gradients (for ELBO, recon, KL, etc).
