@@ -100,9 +100,11 @@ def parse_arguments(args_to_parse):
         help='Whether to use 5 or 4 latents in Dsprites')      
     training.add_argument('--loss-b', type=float, default=1.,
         help='beta factor for loss')
+    ### Added arguments for beta annealing
     training.add_argument('--beta_start', type=float, default=1., help='Initial beta value for annealing.')
     training.add_argument('--beta_end', type=float, default=1., help='Final beta value for annealing.')
-    training.add_argument('--beta_anneal_epochs', type=int, default=None, help='Number of epochs over which to anneal beta. If None, will use total number of epochs.')
+    training.add_argument('--beta_anneal_epochs', type=int, default=None, help='Number of epochs over which to anneal beta.')
+    ###
     training.add_argument('--multiple_l', type=lambda x: False if x in ["False", "false", "", "None", "0"] else True, default=False,
         help='Whether to do search across L values for classifiers')
 
@@ -180,6 +182,10 @@ def main(args):
 
     print("Config:")
     print(vars(args))
+
+    # Ensure beta_anneal_epochs defaults to epochs if not set and annealing is needed
+    if args.beta_anneal_epochs is None and args.beta_start != args.beta_end:
+        args.beta_anneal_epochs = args.epochs
 
     if not args.is_eval_only:
 
