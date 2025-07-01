@@ -83,10 +83,15 @@ class Trainer():
         self.model.train()
 
         if wandb_log:
+            wandb.config.update({"beta": getattr(self.model, "beta", 1)}, allow_val_change=True)
             train_evaluator = Evaluator(model=self.model, device=self.device, seed=self.seed,
                                         sample_size=self.sample_size, dataset_size=self.dataset_size, all_latents=self.all_latents)
 
         for epoch in range(epochs):
+            # Anneal beta
+            if hasattr(self.model, "beta") and hasattr(self, "beta_start") and hasattr(self, "beta_end") and hasattr(self, "beta_anneal_epochs"):
+                self.model.beta = get_beta(epoch, self.beta_start, self.beta_end, self.beta_anneal_epochs)
+
             storer = defaultdict(list)
             epoch_loss = 0
 
@@ -129,6 +134,12 @@ class Trainer():
 
             if wandb_log:
                 metrics, losses = {}, {}
+                # Log ELBO (total loss) to wandb
+                elbo = None
+                if "loss" in storer:
+                    elbo = mean(storer["loss"])
+                    wandb.log({"epoch": epoch, "elbo": elbo, "beta": getattr(self.model, "beta", None)})
+                # ...existing code for metrics/losses...
                 if epoch % max(round(epochs/abs(self.metrics_freq)), 10) == 0 and abs(epoch-epochs) >= 5 and (epoch != 0 if self.metrics_freq < 0 else True):
                     metrics = train_evaluator.compute_metrics(data_loader, self.dataset_name)
                 losses = train_evaluator.compute_losses(data_loader, batch_size=batch_size)
@@ -218,5 +229,24 @@ def save_model(model, directory, metadata=None, filename=MODEL_FILENAME):
 
     
 def mean(l):
-    """Compute the mean of a list"""
+    """Compute the mean of a list."""
     return sum(l) / len(l)
+
+def get_beta(epoch, beta_start, beta_end, anneal_epochs):
+    """
+    Compute the annealed beta value for the current epoch.
+
+    Args:
+        epoch: Current epoch number.
+        beta_start: Initial beta value.
+        beta_end: Final beta value.
+        anneal_epochs: Number of epochs over which to anneal beta.
+    Returns:
+        The annealed beta value.
+    """
+    if anneal_epochs == 0:
+        return beta_end
+    if epoch >= anneal_epochs:
+        return beta_end
+    # Linear schedule
+    return beta_start + (beta_end - beta_start) * (epoch / anneal_epochs)
