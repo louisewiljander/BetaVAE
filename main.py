@@ -17,7 +17,6 @@ import gc
 
 from models.betaVAEHiggins import *
 from models.betaVAEConv import *
-from models.annealedBetaVAE import *
 from utils.datasets import *
 from utils.helpers import *
 from training import Trainer, save_model
@@ -25,12 +24,13 @@ from evaluate import Evaluator
 from utils.visualize import Visualizer, GifTraversalsTraining
 from utils.viz_new_plots import wandb_auth, latent_viz
 from utils.viz_helpers import get_samples
+from utils.beta_schedules import linear_beta_schedule
 
 import wandb
 
 RES_DIR = "results"
 LOG_LEVELS = list(logging._levelToName.values())
-MODELS = ['BetaVAEHiggins', 'BetaVAEConv', 'AnnealedBetaVAE']  # Removed BetaVAEBurgess
+MODELS = ['BetaVAEHiggins', 'BetaVAEConv']
 
 PLOT_TYPES = ['generate-samples', 'data-samples', 'reconstruct', "traversals",
               'reconstruct-traverse', "gif-traversals", "all"]
@@ -191,8 +191,6 @@ def main(args):
         if args.model_type == "BetaVAEHiggins":
             optimizer = optim.Adagrad(model.parameters(), lr=args.lr)
         elif args.model_type == "BetaVAEConv":
-            optimizer = optim.Adagrad(model.parameters(), lr=args.lr)
-        elif args.model_type == "AnnealedBetaVAE":
             optimizer = optim.Adagrad(model.parameters(), lr=args.lr)
         # elif args.model_type == "BetaVAEBurgess":
         #     optimizer = optim.Adam(model.parameters(), lr=args.lr)
