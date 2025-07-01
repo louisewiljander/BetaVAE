@@ -19,6 +19,7 @@ from torch.nn import functional as F
 from evaluate import Evaluator
 
 import wandb
+from utils.beta_schedules import linear_beta_schedule
 
 TRAIN_LOSSES_LOGFILE = "train_losses.log"
 MODEL_FILENAME = "model.pt"
@@ -90,7 +91,8 @@ class Trainer():
         for epoch in range(epochs):
             # Anneal beta
             if hasattr(self.model, "beta") and hasattr(self, "beta_start") and hasattr(self, "beta_end") and hasattr(self, "beta_anneal_epochs"):
-                self.model.beta = get_beta(epoch, self.beta_start, self.beta_end, self.beta_anneal_epochs)
+                total_anneal_epochs = self.beta_anneal_epochs or epochs
+                self.model.beta = linear_beta_schedule(epoch, total_anneal_epochs, self.beta_start, self.beta_end)
                 print(f"Epoch {epoch+1}: beta = {self.model.beta}")  # Log to terminal
                 if wandb_log:
                     wandb.log({"epoch": epoch, "beta": self.model.beta})
@@ -157,6 +159,26 @@ class Trainer():
 
         delta_time = (default_timer() - start) / 60
         self.logger.info('Finished training after {:.1f} min.'.format(delta_time))
+
+
+    # For evaluation/testing without gradients:
+    def evaluate_no_grad(self, data_loader):
+        """
+        Evaluate model on data_loader without gradients (for ELBO, recon, KL, etc).
+        """
+        self.model.eval()
+        results = []
+        with torch.no_grad():
+            for data, _ in data_loader:
+                data = data.to(self.device)
+                recon, mu, logvar = self.model(data)
+                loss, recon_loss, kl_loss = self.model.loss_function(recon, data, mu, logvar)
+                results.append({
+                    'loss': loss.item(),
+                    'recon_loss': recon_loss.item(),
+                    'kl_loss': kl_loss.item()
+                })
+        return results
 
 
 class LossesLogger(object):
