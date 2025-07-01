@@ -189,7 +189,13 @@ class Trainer():
             for data, _ in data_loader:
                 data = data.to(self.device)
                 recon, mu, logvar = self.model(data)
-                loss, recon_loss, kl_loss = self.model.loss_function(recon, data, mu, logvar)
+                result = self.model.loss_function(recon, data, mu, logvar)
+                if isinstance(result, tuple) and len(result) == 3:
+                    loss, recon_loss, kl_loss = result
+                else:
+                    loss = result
+                    recon_loss = float('nan')
+                    kl_loss = float('nan')
                 results.append({
                     'loss': loss.item(),
                     'recon_loss': recon_loss.item(),

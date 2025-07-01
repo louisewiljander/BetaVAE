@@ -141,11 +141,10 @@ class BetaVAEConv(BaseVAE):
             storer['recon_loss'].append(recon_loss.item())
             storer['kl_loss'].append(kld_loss.item())
             for i in range(self.latent_dim):
-                
                 storer['kl_loss_' + str(i)].append(latent_kl[i].item())
             storer['loss'].append(loss.item())
 
-        return loss
+        return loss, recon_loss, kld_loss
 
 
     #smaple form latent sapce
