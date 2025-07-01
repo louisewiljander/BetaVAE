@@ -91,6 +91,9 @@ class Trainer():
             # Anneal beta
             if hasattr(self.model, "beta") and hasattr(self, "beta_start") and hasattr(self, "beta_end") and hasattr(self, "beta_anneal_epochs"):
                 self.model.beta = get_beta(epoch, self.beta_start, self.beta_end, self.beta_anneal_epochs)
+                print(f"Epoch {epoch+1}: beta = {self.model.beta}")  # Log to terminal
+                if wandb_log:
+                    wandb.log({"epoch": epoch, "beta": self.model.beta})
 
             storer = defaultdict(list)
             epoch_loss = 0

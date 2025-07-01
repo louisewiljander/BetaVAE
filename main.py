@@ -17,7 +17,7 @@ import gc
 
 from models.betaVAEHiggins import *
 from models.betaVAEConv import *
-from models.betaVAEBurgess import *
+from models.annealedBetaVAE import *
 from utils.datasets import *
 from utils.helpers import *
 from training import Trainer, save_model
@@ -30,7 +30,7 @@ import wandb
 
 RES_DIR = "results"
 LOG_LEVELS = list(logging._levelToName.values())
-MODELS = ['BetaVAEHiggins', 'BetaVAEConv', 'BetaVAEBurgess']
+MODELS = ['BetaVAEHiggins', 'BetaVAEConv', 'AnnealedBetaVAE']  # Removed BetaVAEBurgess
 
 PLOT_TYPES = ['generate-samples', 'data-samples', 'reconstruct', "traversals",
               'reconstruct-traverse', "gif-traversals", "all"]
@@ -102,7 +102,7 @@ def parse_arguments(args_to_parse):
         help='beta factor for loss')
     training.add_argument('--beta_start', type=float, default=5., help='Initial beta value for annealing.')
     training.add_argument('--beta_end', type=float, default=1., help='Final beta value for annealing.')
-    training.add_argument('--beta_anneal_epochs', type=int, default=0, help='Number of epochs over which to anneal beta.')
+    training.add_argument('--beta_anneal_epochs', type=int, default=None, help='Number of epochs over which to anneal beta. If None, will use total number of epochs.')
     training.add_argument('--multiple_l', type=lambda x: False if x in ["False", "false", "", "None", "0"] else True, default=False,
         help='Whether to do search across L values for classifiers')
 
@@ -192,9 +192,11 @@ def main(args):
             optimizer = optim.Adagrad(model.parameters(), lr=args.lr)
         elif args.model_type == "BetaVAEConv":
             optimizer = optim.Adagrad(model.parameters(), lr=args.lr)
-        elif args.model_type == "BetaVAEBurgess":
-            optimizer = optim.Adam(model.parameters(), lr=args.lr)
-            scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=round(args.epochs*0.75), gamma=0.2)
+        elif args.model_type == "AnnealedBetaVAE":
+            optimizer = optim.Adagrad(model.parameters(), lr=args.lr)
+        # elif args.model_type == "BetaVAEBurgess":
+        #     optimizer = optim.Adam(model.parameters(), lr=args.lr)
+        #     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=round(args.epochs*0.75), gamma=0.2)
         
         gif_visualizer = GifTraversalsTraining(model, args.dataset, exp_dir)
 
