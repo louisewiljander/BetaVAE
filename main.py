@@ -178,6 +178,8 @@ def main(args):
     #set seed
     args.seed = args.seed if args.seed is not None else random.randint(1,10000)
     set_seed(args.seed)
+    print(f"Using random seed: {args.seed}")
+    logger.info(f"Using random seed: {args.seed}")
     if args.name is None:
         args.name = args.model_type
     new_path = args.name+f"{args.seed}" if args.seed is not None else args.name
@@ -264,7 +266,19 @@ def main(args):
         size = (args.n_rows, args.n_cols)
         # same samples for all plots: sample max then take first `x`data  for all plots
         num_samples = args.n_cols * args.n_rows
-        samples = get_samples(viz_loader, num_samples, idcs=args.idcs)
+
+        # Ensure reproducibility and comparison: use fixed data samples for all experiments ---
+        import numpy as np
+        sample_indices_path = os.path.join(exp_dir, "viz_sample_indices.npy")
+        if os.path.exists(sample_indices_path):
+            viz_indices = np.load(sample_indices_path)
+            print(f"[DEBUG] Loaded fixed visualization indices from {sample_indices_path}: {viz_indices[:10]} ...")
+        else:
+            rng = np.random.default_rng(args.seed)
+            viz_indices = rng.choice(len(viz_loader.dataset), size=num_samples, replace=False)
+            np.save(sample_indices_path, viz_indices)
+            print(f"[DEBUG] Saved new visualization indices to {sample_indices_path}: {viz_indices[:10]} ...")
+        samples = torch.stack([viz_loader.dataset[i][0] for i in viz_indices], dim=0)
 
         if "all" in args.plots:
             args.plots = [p for p in PLOT_TYPES if p != "all"]
