@@ -156,10 +156,11 @@ class Trainer():
                         val_losses.append(val_loss.item())
                         val_recon_losses.append(val_recon_loss.item())
                         val_kl_losses.append(val_kl_loss.item())
-                mean_val_loss = sum(val_losses) / len(val_losses)
-                mean_val_recon = sum(val_recon_losses) / len(val_recon_losses)
-                mean_val_kl = sum(val_kl_losses) / len(val_kl_losses)
-                self.logger.info(f"Epoch: {epoch + 1} Validation loss: {mean_val_loss:.2f}")
+                # Normalize validation loss per image, matching training loss normalization
+                mean_val_loss = sum(val_losses) / (len(val_losses) * val_loader.batch_size)
+                mean_val_recon = sum(val_recon_losses) / (len(val_recon_losses) * val_loader.batch_size)
+                mean_val_kl = sum(val_kl_losses) / (len(val_kl_losses) * val_loader.batch_size)
+                self.logger.info(f"Epoch: {epoch + 1} Validation loss per image: {mean_val_loss:.2f}")
                 if wandb_log:
                     wandb.log({
                         "epoch": epoch,
@@ -175,9 +176,9 @@ class Trainer():
                 }
                 self.losses_logger.log(epoch, val_losses_storer)
 
-            # --- LOGGING: Standard ELBO (beta=1) on training data, no gradients ---
+            # Logging standard ELBO (beta=1) on training data, no gradients ---
             self.model.eval()
-            standard_elbo_results = self.evaluate_no_grad(data_loader)
+            standard_elbo_results = self.compute_standard_elbo(data_loader)
             import numpy as np
             mean_standard_elbo = np.mean([r['loss'] for r in standard_elbo_results])
             mean_standard_recon = np.mean([r['recon_loss'] for r in standard_elbo_results])
@@ -215,6 +216,32 @@ class Trainer():
 
         delta_time = (default_timer() - start) / 60
         self.logger.info('Finished training after {:.1f} min.'.format(delta_time))
+
+
+    def compute_standard_elbo(self, data_loader):
+        """
+        Evaluate the model on the given data_loader with beta=1 (standard ELBO), no gradients.
+        Returns a list of dicts with 'loss', 'recon_loss', 'kl_loss' for each batch.
+        """
+        results = []
+        was_training = self.model.training
+        self.model.eval()
+        current_beta = getattr(self.model, 'beta', 1.0)
+        self.model.beta = 1.0
+        with torch.no_grad():
+            for data, _ in data_loader:
+                data = data.to(self.device)
+                recon, mu, logvar = self.model(data)
+                loss, recon_loss, kl_loss = self.model.loss_function(recon, data, mu, logvar)
+                results.append({
+                    'loss': loss.item(),
+                    'recon_loss': recon_loss.item(),
+                    'kl_loss': kl_loss.item()
+                })
+        self.model.beta = current_beta
+        if was_training:
+            self.model.train()
+        return results
 
 
 class LossesLogger(object):
