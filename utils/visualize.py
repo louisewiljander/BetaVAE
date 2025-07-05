@@ -37,37 +37,26 @@ class Visualizer():
         """
         Visualizer is used to generate images of samples, reconstructions,
         latent traversals and so on of the trained model.
-
+        
         Parameters
         ----------
         model : disvae.vae.VAE
-
         dataset : str
             Name of the dataset.
-
         model_dir : str
             The directory that the model is saved to and where the images will
             be stored.
-
         save_images : bool, optional
             Whether to save images or return a tensor.
-
         loss_of_interest : str, optional
             The loss type (as saved in the log file) to order the latent dimensions by and display.
-
         display_loss_per_dim : bool, optional
             if the loss should be included as text next to the corresponding latent dimension images.
-
         max_traversal: float, optional
             The maximum displacement induced by a latent traversal. Symmetrical
             traversals are assumed. If `m>=0.5` then uses absolute value traversal,
             if `m<0.5` uses a percentage of the distribution (quantile).
-            E.g. for the prior the distribution is a standard normal so `m=0.45` c
-            orresponds to an absolute value of `1.645` because `2m=90%%` of a
-            standard normal is between `-1.645` and `1.645`. Note in the case
-            of the posterior, the distribution is not standard normal anymore.
-
-        upsample_factor : floar, optional
+        upsample_factor : float, optional
             Scale factor to upsample the size of the tensor
         """
         self.model = model
@@ -81,6 +70,8 @@ class Visualizer():
         if loss_of_interest is not None:
             self.losses = read_loss_from_file(os.path.join(self.model_dir, TRAIN_FILE),
                                               loss_of_interest)
+        else:
+            self.losses = None
 
     def _get_traversal_range(self, mean=0, std=1):
         """Return the corresponding traversal range in absolute terms."""
@@ -138,12 +129,12 @@ class Visualizer():
         return samples
 
     def _save_or_return(self, to_plot, size, filename, is_force_return=False):
-        """Create plot and save or return it."""
+        """Create plot and save or return it. Includes robust error handling for empty or mismatched input."""
+        if to_plot is None or (hasattr(to_plot, 'numel') and to_plot.numel() == 0):
+            raise ValueError(f"[Visualizer] Attempted to plot empty tensor in '{filename}'. Check input data and model output.")
         to_plot = F.interpolate(to_plot, scale_factor=self.upsample_factor)
-
         if size[0] * size[1] != to_plot.shape[0]:
-            raise ValueError("Wrong size {} for datashape {}".format(size, to_plot.shape))
-
+            raise ValueError(f"[Visualizer] Wrong size {size} for datashape {to_plot.shape} in '{filename}'. Check grid size and input batch size.")
         # `nrow` is number of images PER row => number of col
         kwargs = dict(nrow=size[1], pad_value=(1 - get_background(self.dataset)))
         if self.save_images and not is_force_return:
@@ -197,45 +188,24 @@ class Visualizer():
         return os.path.join(self.model_dir, PLOT_NAMES["data_samples"]), self._save_or_return(data, size, PLOT_NAMES["data_samples"], is_force_return=True)
 
     def reconstruct(self, data, size=(8, 8), is_original=True, is_force_return=False):
-        """Generate reconstructions of data through the model.
-
-        Parameters
-        ----------
-        data : torch.Tensor
-            Data to be reconstructed. Shape (N, C, H, W)
-
-        size : tuple of ints, optional
-            Size of grid on which reconstructions will be plotted. The number
-            of rows should be even when `is_original`, so that upper
-            half contains true data and bottom half contains reconstructions.contains
-
-        is_original : bool, optional
-            Whether to exclude the original plots.
-
-        is_force_return : bool, optional
-            Force returning instead of saving the image.
-        """
+        if data is None or (hasattr(data, 'numel') and data.numel() == 0):
+            raise ValueError("[Visualizer] Input data for reconstruction is empty. Check your dataloader or input batch.")
         if is_original:
             if size[0] % 2 != 0:
-                raise ValueError("Should be even number of rows when showing originals not {}".format(size[0]))
+                raise ValueError(f"[Visualizer] Should be even number of rows when showing originals, not {size[0]}")
             n_samples = size[0] // 2 * size[1]
         else:
             n_samples = size[0] * size[1]
-
         with torch.no_grad():
             originals = data.to(self.device)[:n_samples, ...]
+            if originals.numel() == 0:
+                raise ValueError("[Visualizer] No data available for reconstruction after slicing. Check input size and grid size.")
             recs, _, _ = self.model(originals)
-
         originals = originals.cpu()
         recs = recs.view(-1, *self.model.img_size).cpu()
-
         to_plot = torch.cat([originals, recs]) if is_original else recs
-        self._save_or_return(to_plot, size, PLOT_NAMES["reconstruct"],
-                                            is_force_return=is_force_return)
-
-
-        return os.path.join(self.model_dir, PLOT_NAMES["reconstruct"]), self._save_or_return(to_plot, size, PLOT_NAMES["reconstruct"],
-                                    is_force_return=True)
+        self._save_or_return(to_plot, size, PLOT_NAMES["reconstruct"], is_force_return=is_force_return)
+        return os.path.join(self.model_dir, PLOT_NAMES["reconstruct"]), self._save_or_return(to_plot, size, PLOT_NAMES["reconstruct"], is_force_return=True)
 
     def traversals(self,
                    data=None,
@@ -243,52 +213,45 @@ class Visualizer():
                    n_per_latent=8,
                    n_latents=None,
                    is_force_return=False):
-        """Plot traverse through all latent dimensions (prior or posterior) one
-        by one and plots a grid of images where each row corresponds to a latent
-        traversal of one latent dimension.
 
-        Parameters
-        ----------
-        data : bool, optional
-            Data to use for computing the latent posterior. If `None` traverses
-            the prior.
-
-        n_per_latent : int, optional
-            The number of points to include in the traversal of a latent dimension.
-            I.e. number of columns.
-
-        n_latents : int, optional
-            The number of latent dimensions to display. I.e. number of rows. If `None`
-            uses all latents.
-
-        is_reorder_latents : bool, optional
-            If the latent dimensions should be reordered or not
-
-        is_force_return : bool, optional
-            Force returning instead of saving the image.
-        """
         n_latents = n_latents if n_latents is not None else self.model.latent_dim
-        latent_samples = [self._traverse_line(dim, n_per_latent, data=data)
-                          for dim in range(self.latent_dim)]
-        decoded_traversal = self._decode_latents(torch.cat(latent_samples, dim=0))
-
+        if n_latents == 0 or self.model.latent_dim == 0:
+            raise ValueError("[Visualizer] Latent dimension is zero. Check model configuration.")
+        latent_samples = []
+        for dim in range(self.latent_dim):
+            try:
+                samples = self._traverse_line(dim, n_per_latent, data=data)
+                if samples is None or (hasattr(samples, 'numel') and samples.numel() == 0):
+                    print(f"[Visualizer] Warning: Empty samples for latent dim {dim} in traversals.")
+                latent_samples.append(samples)
+            except Exception as e:
+                print(f"[Visualizer] Error in _traverse_line for dim {dim}: {e}")
+                continue
+        if not latent_samples or all((s is None or (hasattr(s, 'numel') and s.numel() == 0)) for s in latent_samples):
+            raise ValueError("[Visualizer] All latent_samples are empty in traversals. Check model and input data.")
+        try:
+            decoded_traversal = self._decode_latents(torch.cat(latent_samples, dim=0))
+        except Exception as e:
+            raise RuntimeError(f"[Visualizer] Failed to decode latent samples in traversals: {e}")
         if is_reorder_latents:
+            if self.losses is None or len(self.losses) == 0:
+                raise ValueError("[Visualizer] Cannot reorder latents: self.losses is None or empty. Check loss logging and file reading.")
             n_images, *other_shape = decoded_traversal.size()
             n_rows = n_images // n_per_latent
             decoded_traversal = decoded_traversal.reshape(n_rows, n_per_latent, *other_shape)
-            decoded_traversal = sort_list_by_other(decoded_traversal, self.losses)
-            decoded_traversal = torch.stack(decoded_traversal, dim=0)
+            sorted_traversal = sort_list_by_other(decoded_traversal, self.losses)
+            if not sorted_traversal or (isinstance(sorted_traversal, list) and len(sorted_traversal) == 0):
+                raise ValueError("[Visualizer] sort_list_by_other returned an empty list. Check that losses and decoded_traversal are valid and non-empty.")
+            decoded_traversal = torch.stack(sorted_traversal, dim=0)
             decoded_traversal = decoded_traversal.reshape(n_images, *other_shape)
-
         decoded_traversal = decoded_traversal[range(n_per_latent * n_latents), ...]
-
+        if decoded_traversal.numel() == 0:
+            raise ValueError("[Visualizer] Decoded traversal is empty. Check latent_samples and model.decode.")
         size = (n_latents, n_per_latent)
         sampling_type = "prior" if data is None else "posterior"
-        filename = "{}_{}".format(sampling_type, PLOT_NAMES["traversals"])
-        self._save_or_return(decoded_traversal.data, size, filename,
-                                            is_force_return=is_force_return)
-        return os.path.join(self.model_dir, filename), self._save_or_return(decoded_traversal.data, size, filename,
-                                    is_force_return=True)
+        filename = f"{sampling_type}_{PLOT_NAMES['traversals']}"
+        self._save_or_return(decoded_traversal.data, size, filename, is_force_return=is_force_return)
+        return os.path.join(self.model_dir, filename), self._save_or_return(decoded_traversal.data, size, filename, is_force_return=True)
 
     def latents_traversal_plot(self,
                     emb_model,
@@ -299,7 +262,7 @@ class Visualizer():
         n_latents = n_latents if n_latents is not None else self.model.latent_dim
         latent_samples = [self._traverse_line(dim, n_per_latent, data=data).detach().numpy()
                           for dim in range(self.latent_dim)]
-        # Only support emb_model with fit_transform or transform (e.g. UMAP)
+        
         if hasattr(emb_model, "fit_transform"):
             emb_latents = emb_model.fit_transform(list(itertools.chain.from_iterable(latent_samples)))
         else:
@@ -338,65 +301,64 @@ class Visualizer():
             Whether the KL values next to the traversal rows.
         """
         n_latents = n_latents if n_latents is not None else self.model.latent_dim
-
-        fname, reconstructions = self.reconstruct(data[:2 * n_per_latent, ...],
-                                           size=(2, n_per_latent),
-                                           is_force_return=True)
-        fname, traversals = self.traversals(data=data[0:1, ...] if is_posterior else None,
-                                     is_reorder_latents=True,
-                                     n_per_latent=n_per_latent,
-                                     n_latents=n_latents,
-                                     is_force_return=True)
-
-        concatenated = np.concatenate((reconstructions, traversals), axis=0)
-        concatenated = Image.fromarray(concatenated)
-
-        if is_show_text:
+        if data is None or (hasattr(data, 'numel') and data.numel() == 0):
+            raise ValueError("[Visualizer] Input data for reconstruct_traverse is empty. Check your dataloader or input batch.")
+        try:
+            fname, reconstructions = self.reconstruct(data[:2 * n_per_latent, ...],
+                                               size=(2, n_per_latent),
+                                               is_force_return=True)
+        except Exception as e:
+            raise RuntimeError(f"[Visualizer] Failed to generate reconstructions in reconstruct_traverse: {e}")
+        try:
+            fname, traversals = self.traversals(data=data[0:1, ...] if is_posterior else None,
+                                         is_reorder_latents=True,
+                                         n_per_latent=n_per_latent,
+                                         n_latents=n_latents,
+                                         is_force_return=True)
+        except Exception as e:
+            raise RuntimeError(f"[Visualizer] Failed to generate traversals in reconstruct_traverse: {e}")
+        if reconstructions is None or traversals is None:
+            raise ValueError("[Visualizer] Reconstructions or traversals are empty in reconstruct_traverse.")
+        try:
+            concatenated = np.concatenate((reconstructions, traversals), axis=0)
+            concatenated = Image.fromarray(concatenated)
+        except Exception as e:
+            raise RuntimeError(f"[Visualizer] Failed to concatenate or convert images in reconstruct_traverse: {e}")
+        if is_show_text and self.losses is not None:
             losses = sorted(self.losses, reverse=True)[:n_latents]
-            labels = ['orig', 'recon'] + ["KL={:.4f}".format(l) for l in losses]
+            labels = ['orig', 'recon'] + [f"KL={l:.4f}" for l in losses]
             concatenated = add_labels(concatenated, labels)
-
         filename = os.path.join(self.model_dir, PLOT_NAMES["reconstruct_traverse"])
         concatenated.save(filename)
         return filename, concatenated
 
     def gif_traversals(self, data, n_latents=None, n_per_gif=15):
-        """Generates a grid of gifs of latent posterior traversals where the rows
-        are the latent dimensions and the columns are random images.
-
-        Parameters
-        ----------
-        data : bool
-            Data to use for computing the latent posteriors. The number of datapoint
-            (batchsize) will determine the number of columns of the grid.
-
-        n_latents : int, optional
-            The number of latent dimensions to display. I.e. number of rows. If `None`
-            uses all latents.
-
-        n_per_gif : int, optional
-            Number of images per gif (number of traversals)
-        """
+        if data is None or (hasattr(data, 'numel') and data.numel() == 0):
+            raise ValueError("[Visualizer] Input data for gif_traversals is empty. Check your dataloader or input batch.")
         n_images, _, _, width_col = data.shape
         width_col = int(width_col * self.upsample_factor)
         all_cols = [[] for c in range(n_per_gif)]
         for i in range(n_images):
-            fname, grid = self.traversals(data=data[i:i + 1, ...], is_reorder_latents=True,
-                                   n_per_latent=n_per_gif, n_latents=n_latents,
-                                   is_force_return=True)
-
+            try:
+                fname, grid = self.traversals(data=data[i:i + 1, ...], is_reorder_latents=True,
+                                       n_per_latent=n_per_gif, n_latents=n_latents,
+                                       is_force_return=True)
+            except Exception as e:
+                print(f"[Visualizer] Error in traversals for gif_traversals, image {i}: {e}")
+                continue
+            if grid is None or (hasattr(grid, 'shape') and grid.shape[0] == 0):
+                print(f"[Visualizer] Warning: Empty grid for image {i} in gif_traversals.")
+                continue
             height, width, c = grid.shape
             padding_width = (width - width_col * n_per_gif) // (n_per_gif + 1)
-
-            # split the grids into a list of column images (and removes padding)
             for j in range(n_per_gif):
-                all_cols[j].append(grid[:, [(j + 1) * padding_width + j * width_col + i
-                                            for i in range(width_col)], :])
-
+                all_cols[j].append(grid[:, [(j + 1) * padding_width + j * width_col + k
+                                            for k in range(width_col)], :])
         pad_values = (1 - get_background(self.dataset)) * 255
         all_cols = [concatenate_pad(cols, pad_size=2, pad_values=pad_values, axis=1)
-                    for cols in all_cols]
-
+                    for cols in all_cols if cols]
+        if not all_cols:
+            raise ValueError("[Visualizer] No columns generated for gif_traversals. Check input data and traversals output.")
         filename = os.path.join(self.model_dir, PLOT_NAMES["gif_traversals"])
         imageio.mimsave(filename, all_cols, fps=FPS_GIF)
         return filename, all_cols

@@ -67,7 +67,11 @@ def parse_arguments(args_to_parse):
     general.add_argument('-i', '--idcs', type=int, nargs='+', default=[],
                         help='List of indices to of images to put at the begining of the samples.')
     general.add_argument("--plots", type=str, nargs='+', choices=PLOT_TYPES, default="all",
-                        help="List of all plots to generate. `generate-samples`: random decoded samples. `data-samples` samples from the dataset. `reconstruct` first rnows//2 will be the original and rest will be the corresponding reconstructions. `traversals` traverses the most important rnows dimensions with ncols different samples from the prior or posterior. `reconstruct-traverse` first row for original, second are reconstructions, rest are traversals. `gif-traversals` grid of gifs where rows are latent dimensions, columns are examples, each gif shows posterior traversals. `all` runs every plot.")
+                        help="List of all plots to generate. `generate-samples`: random decoded samples. `data-samples` samples from the dataset. " \
+                        "`reconstruct` first rnows//2 will be the original and rest will be the corresponding reconstructions. `traversals` traverses " \
+                        "the most important rnows dimensions with ncols different samples from the prior or posterior. `reconstruct-traverse` first row for " \
+                        "original, second are reconstructions, rest are traversals. `gif-traversals` grid of gifs where rows are latent dimensions, columns are " \
+                        "examples, each gif shows posterior traversals. `all` runs every plot.")
     general.add_argument('--n-rows', type=int, default=6,
                         help='The number of rows to visualize (if applicable).')
     general.add_argument('--n-cols', type=int, default=7,
@@ -247,9 +251,10 @@ def main(args):
                     model_dir=exp_dir,
                     dataset=args.dataset,
                     max_traversal=args.max_traversal,
-                    loss_of_interest='kl_loss_',
+                    loss_of_interest='train_kl_loss_',
                     upsample_factor=1)
 
+        
         traversal_plots = {}
         base_datum = next(iter(train_loader))[0][0].unsqueeze(dim=0)
         # Remove traversal_plots using dim_reduction_models

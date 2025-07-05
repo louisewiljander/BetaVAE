@@ -131,8 +131,12 @@ class Trainer():
 
             mean_epoch_loss = epoch_loss / len(data_loader)
 
-            # --- LOGGING: Explicitly label as training loss ---
-            self.logger.info('Epoch: {} Training loss per image: {:.2f}'.format(epoch + 1, mean_epoch_loss))
+            # --- LOGGING: Printing outputs
+            mean_train_recon = sum(storer['recon_loss']) / (len(storer['recon_loss']) * data_loader.batch_size) if 'recon_loss' in storer else float('nan')
+            mean_train_kl = sum(storer['kl_loss']) / (len(storer['kl_loss']) * data_loader.batch_size) if 'kl_loss' in storer else float('nan')
+            print(f"Epoch {epoch + 1} | Beta: {self.model.beta}")
+            print(f"Train loss per image: {mean_epoch_loss:.2f} | Recon: {mean_train_recon:.2f} | KL: {mean_train_kl:.2f}")
+            self.logger.info(f"Epoch: {epoch + 1} Training loss per image: {mean_epoch_loss:.2f}")
             if wandb_log:
                 wandb.log({"epoch": epoch, "train_loss": mean_epoch_loss, "beta": getattr(self.model, "beta", None)})
 
@@ -160,6 +164,8 @@ class Trainer():
                 mean_val_loss = sum(val_losses) / (len(val_losses) * val_loader.batch_size)
                 mean_val_recon = sum(val_recon_losses) / (len(val_recon_losses) * val_loader.batch_size)
                 mean_val_kl = sum(val_kl_losses) / (len(val_kl_losses) * val_loader.batch_size)
+                # Logging validation loss
+                print(f"Validation loss per image: {mean_val_loss:.2f} | Recon: {mean_val_recon:.2f} | KL: {mean_val_kl:.2f}")
                 self.logger.info(f"Epoch: {epoch + 1} Validation loss per image: {mean_val_loss:.2f}")
                 if wandb_log:
                     wandb.log({
@@ -180,9 +186,10 @@ class Trainer():
             self.model.eval()
             standard_elbo_results = self.compute_standard_elbo(data_loader)
             import numpy as np
-            mean_standard_elbo = np.mean([r['loss'] for r in standard_elbo_results])
-            mean_standard_recon = np.mean([r['recon_loss'] for r in standard_elbo_results])
-            mean_standard_kl = np.mean([r['kl_loss'] for r in standard_elbo_results])
+            batch_size = data_loader.batch_size
+            mean_standard_elbo = np.mean([r['loss'] for r in standard_elbo_results]) / batch_size
+            mean_standard_recon = np.mean([r['recon_loss'] for r in standard_elbo_results]) / batch_size
+            mean_standard_kl = np.mean([r['kl_loss'] for r in standard_elbo_results]) / batch_size
             if wandb_log:
                 wandb.log({
                     "epoch": epoch,

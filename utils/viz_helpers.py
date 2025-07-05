@@ -41,23 +41,34 @@ def sort_list_by_other(to_sort, other, reverse=True):
 
 
 # TO-DO: clean
-def read_loss_from_file(log_file_path, loss_to_fetch):
-    """ Read the average KL per latent dimension at the final stage of training from the log file.
-        Parameters
-        ----------
-        log_file_path : str
-            Full path and file name for the log file. For example 'experiments/custom/losses.log'.
+def read_loss_from_file(log_file_path, loss_prefix="train_kl_loss_"):
+    """
+    Read the average KL divergence per latent dimension at the final stage of training (default: training KLs).
 
-        loss_to_fetch : str
-            The loss type to search for in the log file and return. This must be in the exact form as stored.
+    Parameters
+    ----------
+    log_file_path : str
+        Full path and file name for the log file. For example 'experiments/custom/losses.log'.
+    loss_prefix : str, optional
+        The prefix of the loss type to search for in the log file and return. E.g. 'train_kl_loss_' (default), or 'val_kl_loss_'.
+        This will return the average KL for each latent dimension for the last epoch.
+    Returns
+    -------
+    list of float
+        Average KL per latent dimension for the last epoch, sorted by latent index.
     """
     EPOCH = "Epoch"
     LOSS = "Loss"
 
     logs = pd.read_csv(log_file_path)
     df_last_epoch_loss = logs[logs.loc[:, EPOCH] == logs.loc[:, EPOCH].max()]
-    df_last_epoch_loss = df_last_epoch_loss.loc[df_last_epoch_loss.loc[:, LOSS].str.startswith(loss_to_fetch), :]
-    df_last_epoch_loss.loc[:, LOSS] = df_last_epoch_loss.loc[:, LOSS].str.replace(loss_to_fetch, "").astype(int)
+    # Find all columns that start with the prefix
+    df_last_epoch_loss = df_last_epoch_loss.loc[df_last_epoch_loss.loc[:, LOSS].str.startswith(loss_prefix), :]
+    if df_last_epoch_loss.empty:
+        print(f"[DEBUG] No losses found in log file for prefix '{loss_prefix}'. Available losses: {logs[LOSS].unique()}")
+        return []
+    # Remove prefix and convert to int for sorting
+    df_last_epoch_loss.loc[:, LOSS] = df_last_epoch_loss.loc[:, LOSS].str.replace(loss_prefix, "").astype(int)
     df_last_epoch_loss = df_last_epoch_loss.sort_values(LOSS).loc[:, "Value"]
     return list(df_last_epoch_loss)
 
