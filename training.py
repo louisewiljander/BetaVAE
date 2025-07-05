@@ -70,14 +70,14 @@ class Trainer():
         self.gif_visualizer = gif_visualizer
         self.seed = seed
         self.dataset_name = dataset_name
-        # Beta scheduling attributes
+        ### Beta annealing attributes ###
         self.beta_start = beta_start
         self.beta_end = beta_end
         self.beta_anneal_epochs = beta_anneal_epochs
 
 
 
-    def __call__(self, data_loader, epochs=10, checkpoint_every = 10, wandb_log = False):
+    def __call__(self, data_loader, epochs=10, checkpoint_every=10, wandb_log=False, val_loader=None):
         """
         Run the training loop.
 
@@ -86,6 +86,7 @@ class Trainer():
             epochs: Number of epochs to train.
             checkpoint_every: Save model every N epochs.
             wandb_log: Whether to log metrics to Weights & Biases.
+            val_loader: DataLoader for validation data.
         """
         start = default_timer()
         storers = []
@@ -140,6 +141,21 @@ class Trainer():
             if self.gif_visualizer is not None:
                 self.gif_visualizer()
 
+            ### Validation Loss Logging ###
+            if val_loader is not None:
+                self.model.eval()
+                val_losses = []
+                with torch.no_grad():
+                    for data, _ in val_loader:
+                        data = data.to(self.device)
+                        recon, mu, logvar = self.model(data)
+                        val_loss, val_recon_loss, val_kl_loss = self.model.loss_function(recon, data, mu, logvar)
+                        val_losses.append(val_loss.item())
+                mean_val_loss = sum(val_losses) / len(val_losses)
+                self.logger.info(f"Epoch: {epoch + 1} Validation loss: {mean_val_loss:.2f}")
+                if wandb_log:
+                    wandb.log({"epoch": epoch, "val_loss": mean_val_loss})
+
             if epoch % checkpoint_every == 0:
                 save_model(self.model,self.save_dir,
                            filename="model-{}.pt".format(epoch))
@@ -162,23 +178,6 @@ class Trainer():
                 losses = train_evaluator.compute_losses(data_loader, batch_size=batch_size)
                 wandb.log({"epoch":epoch,"metric":metrics, "loss":losses})
 
-                ### Log standard ELBO (beta=1) on training data, no gradients ###
-                original_beta = self.model.beta
-                self.model.beta = 1.0
-                standard_elbo_results = self.evaluate_no_grad(data_loader)
-                self.model.beta = original_beta
-
-                import numpy as np
-                mean_standard_elbo = np.mean([r['loss'] for r in standard_elbo_results])
-                mean_recon = np.mean([r['recon_loss'] for r in standard_elbo_results])
-                mean_kl = np.mean([r['kl_loss'] for r in standard_elbo_results])
-                wandb.log({
-                    "epoch": epoch,
-                    "standard_elbo": mean_standard_elbo,
-                    "standard_recon_loss": mean_recon,
-                    "standard_kl_loss": mean_kl
-                })
-
             self.model.train()           
 
         if self.gif_visualizer is not None:
@@ -188,32 +187,6 @@ class Trainer():
 
         delta_time = (default_timer() - start) / 60
         self.logger.info('Finished training after {:.1f} min.'.format(delta_time))
-
-
-    ### Added method for evaluation/testing without gradients: ###
-    def evaluate_no_grad(self, data_loader):
-        """
-        Evaluate model on data_loader without gradients (for ELBO, recon, KL, etc).
-        """
-        self.model.eval()
-        results = []
-        with torch.no_grad():
-            for data, _ in data_loader:
-                data = data.to(self.device)
-                recon, mu, logvar = self.model(data)
-                result = self.model.loss_function(recon, data, mu, logvar)
-                if isinstance(result, tuple) and len(result) == 3:
-                    loss, recon_loss, kl_loss = result
-                else:
-                    loss = result
-                    recon_loss = float('nan')
-                    kl_loss = float('nan')
-                results.append({
-                    'loss': loss.item(),
-                    'recon_loss': recon_loss.item(),
-                    'kl_loss': kl_loss.item()
-                })
-        return results
 
 
 class LossesLogger(object):
