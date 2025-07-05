@@ -56,34 +56,44 @@ def get_background(dataset):
 
 
 def get_dataloaders(dataset, root=None, shuffle=True, pin_memory=True,
-                    batch_size=128, logger=logging.getLogger(__name__), **kwargs):
-    """A generic data loader
+                    batch_size=128, val_split=0.1, logger=logging.getLogger(__name__), **kwargs):
+    """A generic data loader with added train/val split support
 
     Parameters
     ----------
     dataset : {"mnist", "fashion", "dsprites", "celeba", "chairs"}
         Name of the dataset to load
-
+    val_split : float
+        Fraction of the dataset to use for validation (default 0.1)
     root : str
         Path to the dataset root. If `None` uses the default one.
-
     kwargs :
         Additional arguments to `DataLoader`. Default values are modified.
     """
     pin_memory = pin_memory and torch.cuda.is_available  # only pin if GPU available
     Dataset = get_dataset(dataset)
-    dataset = Dataset(logger=logger) if root is None else Dataset(root=root, logger=logger)
+    dataset_obj = Dataset(logger=logger) if root is None else Dataset(root=root, logger=logger)
 
-    return DataLoader(dataset,
+    # Split indices for train/val
+    n_total = len(dataset_obj)
+    n_val = int(val_split * n_total)
+    n_train = n_total - n_val
+    train_set, val_set = torch.utils.data.random_split(dataset_obj, [n_train, n_val])
+
+    train_loader = DataLoader(train_set,
                       batch_size=batch_size,
                       shuffle=True,
                       pin_memory=pin_memory,
-                      **kwargs), dataset, DataLoader(dataset,
-                      batch_size=1,
-                      shuffle=True,
-                      ), DataLoader(dataset,
+                      **kwargs)
+    val_loader = DataLoader(val_set,
                       batch_size=batch_size,
-                      shuffle=False)
+                      shuffle=False,
+                      pin_memory=pin_memory,
+                      **kwargs)
+    # For compatibility, also return the full dataset and a viz/test loader
+    viz_loader = DataLoader(dataset_obj, batch_size=1, shuffle=True)
+    test_loader = DataLoader(dataset_obj, batch_size=batch_size, shuffle=False)
+    return train_loader, val_loader, dataset_obj, viz_loader, test_loader
 
 
 
