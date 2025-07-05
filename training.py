@@ -131,13 +131,14 @@ class Trainer():
 
             mean_epoch_loss = epoch_loss / len(data_loader)
 
-            self.logger.info('Epoch: {} Average loss per image: {:.2f}'.format(epoch + 1,
-                                                                               mean_epoch_loss))
+            # --- LOGGING: Explicitly label as training loss ---
+            self.logger.info('Epoch: {} Training loss per image: {:.2f}'.format(epoch + 1, mean_epoch_loss))
             if wandb_log:
-                wandb.log({"epoch": epoch, "beta": getattr(self.model, "beta", None)})
+                wandb.log({"epoch": epoch, "train_loss": mean_epoch_loss, "beta": getattr(self.model, "beta", None)})
 
-            self.losses_logger.log(epoch, storer)
-  
+            # --- LOGGING: Write training losses to CSV with 'train_' prefix ---
+            train_losses_storer = {f"train_{k}": v for k, v in storer.items()}
+            self.losses_logger.log(epoch, train_losses_storer)
             if self.gif_visualizer is not None:
                 self.gif_visualizer()
 
@@ -145,16 +146,57 @@ class Trainer():
             if val_loader is not None:
                 self.model.eval()
                 val_losses = []
+                val_recon_losses = []
+                val_kl_losses = []
                 with torch.no_grad():
                     for data, _ in val_loader:
                         data = data.to(self.device)
                         recon, mu, logvar = self.model(data)
                         val_loss, val_recon_loss, val_kl_loss = self.model.loss_function(recon, data, mu, logvar)
                         val_losses.append(val_loss.item())
+                        val_recon_losses.append(val_recon_loss.item())
+                        val_kl_losses.append(val_kl_loss.item())
                 mean_val_loss = sum(val_losses) / len(val_losses)
+                mean_val_recon = sum(val_recon_losses) / len(val_recon_losses)
+                mean_val_kl = sum(val_kl_losses) / len(val_kl_losses)
                 self.logger.info(f"Epoch: {epoch + 1} Validation loss: {mean_val_loss:.2f}")
                 if wandb_log:
-                    wandb.log({"epoch": epoch, "val_loss": mean_val_loss})
+                    wandb.log({
+                        "epoch": epoch,
+                        "val_loss": mean_val_loss,
+                        "val_recon_loss": mean_val_recon,
+                        "val_kl_loss": mean_val_kl
+                    })
+                # Optionally log to CSV as well
+                val_losses_storer = {
+                    "val_loss": [mean_val_loss],
+                    "val_recon_loss": [mean_val_recon],
+                    "val_kl_loss": [mean_val_kl]
+                }
+                self.losses_logger.log(epoch, val_losses_storer)
+
+            # --- LOGGING: Standard ELBO (beta=1) on training data, no gradients ---
+            self.model.eval()
+            standard_elbo_results = self.evaluate_no_grad(data_loader)
+            import numpy as np
+            mean_standard_elbo = np.mean([r['loss'] for r in standard_elbo_results])
+            mean_standard_recon = np.mean([r['recon_loss'] for r in standard_elbo_results])
+            mean_standard_kl = np.mean([r['kl_loss'] for r in standard_elbo_results])
+            if wandb_log:
+                wandb.log({
+                    "epoch": epoch,
+                    "standard_elbo": mean_standard_elbo,
+                    "standard_recon_loss": mean_standard_recon,
+                    "standard_kl_loss": mean_standard_kl
+                })
+            # Optionally log to CSV as well
+            standard_elbo_storer = {
+                "standard_elbo": [mean_standard_elbo],
+                "standard_recon_loss": [mean_standard_recon],
+                "standard_kl_loss": [mean_standard_kl]
+            }
+            self.losses_logger.log(epoch, standard_elbo_storer)
+            self.model.train()
 
             if epoch % checkpoint_every == 0:
                 save_model(self.model,self.save_dir,
@@ -164,20 +206,6 @@ class Trainer():
                 self.scheduler.step()
 
             self.model.eval()
-
-            if wandb_log:
-                metrics, losses = {}, {}
-                # Log ELBO (total loss) to wandb
-                elbo = None
-                if "loss" in storer:
-                    elbo = mean(storer["loss"])
-                    wandb.log({"epoch": epoch, "elbo": elbo, "beta": getattr(self.model, "beta", None)})
-                
-                if epoch % max(round(epochs/abs(self.metrics_freq)), 10) == 0 and abs(epoch-epochs) >= 5 and (epoch != 0 if self.metrics_freq < 0 else True):
-                    metrics = train_evaluator.compute_metrics(data_loader, self.dataset_name)
-                losses = train_evaluator.compute_losses(data_loader, batch_size=batch_size)
-                wandb.log({"epoch":epoch,"metric":metrics, "loss":losses})
-
             self.model.train()           
 
         if self.gif_visualizer is not None:
@@ -221,13 +249,6 @@ class LossesLogger(object):
         with open(self.file_path_name, "a") as f:
             for k, v in losses_storer.items():
                 f.write("{},{},{}\n".format(epoch, k, mean(v)))
-            # Always log the ELBO (total loss) as 'elbo'
-            if "recon_loss" in losses_storer and "kl_loss" in losses_storer:
-                # Try to get beta from storer if present, else assume 1
-                beta = losses_storer.get("beta", [1])[0]
-                elbo = mean(losses_storer["recon_loss"]) + beta * mean(losses_storer["kl_loss"])
-                f.write("{},{},{}\n".format(epoch, "elbo", elbo))
-
 
 def save_model(model, directory, metadata=None, filename=MODEL_FILENAME):
     """
