@@ -102,7 +102,6 @@ class Trainer():
             if hasattr(self.model, "beta") and hasattr(self, "beta_start") and hasattr(self, "beta_end") and hasattr(self, "beta_anneal_epochs"):
                 total_anneal_epochs = self.beta_anneal_epochs or epochs
                 self.model.beta = linear_beta_schedule(epoch, total_anneal_epochs, self.beta_start, self.beta_end)
-                print(f"Epoch {epoch+1}: beta = {self.model.beta}")  # Log to terminal
                 if wandb_log:
                     wandb.log({"epoch": epoch, "beta": self.model.beta})
 
@@ -152,11 +151,12 @@ class Trainer():
                 val_losses = []
                 val_recon_losses = []
                 val_kl_losses = []
+                val_storer = defaultdict(list)
                 with torch.no_grad():
                     for data, _ in val_loader:
                         data = data.to(self.device)
                         recon, mu, logvar = self.model(data)
-                        val_loss, val_recon_loss, val_kl_loss = self.model.loss_function(recon, data, mu, logvar)
+                        val_loss, val_recon_loss, val_kl_loss = self.model.loss_function(recon, data, mu, logvar, storer=val_storer)
                         val_losses.append(val_loss.item())
                         val_recon_losses.append(val_recon_loss.item())
                         val_kl_losses.append(val_kl_loss.item())
@@ -164,6 +164,11 @@ class Trainer():
                 mean_val_loss = sum(val_losses) / (len(val_losses) * val_loader.batch_size)
                 mean_val_recon = sum(val_recon_losses) / (len(val_recon_losses) * val_loader.batch_size)
                 mean_val_kl = sum(val_kl_losses) / (len(val_kl_losses) * val_loader.batch_size)
+                # Compute mean per-latent KLs (normalized per image)
+                val_kl_latent_means = {}
+                for k, v in val_storer.items():
+                    if k.startswith('kl_loss_'):
+                        val_kl_latent_means[f"val_{k}"] = [sum(v) / (len(v) * val_loader.batch_size)]
                 # Logging validation loss
                 print(f"Validation loss per image: {mean_val_loss:.2f} | Recon: {mean_val_recon:.2f} | KL: {mean_val_kl:.2f}")
                 self.logger.info(f"Epoch: {epoch + 1} Validation loss per image: {mean_val_loss:.2f}")
@@ -172,13 +177,15 @@ class Trainer():
                         "epoch": epoch,
                         "val_loss": mean_val_loss,
                         "val_recon_loss": mean_val_recon,
-                        "val_kl_loss": mean_val_kl
+                        "val_kl_loss": mean_val_kl,
+                        **{k: v[0] for k, v in val_kl_latent_means.items()}
                     })
                 # Optionally log to CSV as well
                 val_losses_storer = {
                     "val_loss": [mean_val_loss],
                     "val_recon_loss": [mean_val_recon],
-                    "val_kl_loss": [mean_val_kl]
+                    "val_kl_loss": [mean_val_kl],
+                    **val_kl_latent_means
                 }
                 self.losses_logger.log(epoch, val_losses_storer)
 
