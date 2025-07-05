@@ -247,14 +247,15 @@ def main(args):
         except:
             pass
     
+        # Use validation loader for visualization
+        viz_loader = val_loader
         viz = Visualizer(model=model,
                     model_dir=exp_dir,
                     dataset=args.dataset,
                     max_traversal=args.max_traversal,
-                    loss_of_interest='train_kl_loss_',
+                    loss_of_interest='val_kl_loss_',
                     upsample_factor=1)
 
-        
         traversal_plots = {}
         base_datum = next(iter(train_loader))[0][0].unsqueeze(dim=0)
         # Remove traversal_plots using dim_reduction_models
