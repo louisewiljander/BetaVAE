@@ -189,29 +189,31 @@ class Trainer():
                 }
                 self.losses_logger.log(epoch, val_losses_storer)
 
-            # Logging standard ELBO (beta=1) on training data, no gradients ---
-            self.model.eval()
-            standard_elbo_results = self.compute_standard_elbo(data_loader)
-            import numpy as np
-            batch_size = data_loader.batch_size
-            mean_standard_elbo = np.mean([r['loss'] for r in standard_elbo_results]) / batch_size
-            mean_standard_recon = np.mean([r['recon_loss'] for r in standard_elbo_results]) / batch_size
-            mean_standard_kl = np.mean([r['kl_loss'] for r in standard_elbo_results]) / batch_size
-            if wandb_log:
-                wandb.log({
-                    "epoch": epoch,
-                    "standard_elbo": mean_standard_elbo,
-                    "standard_recon_loss": mean_standard_recon,
-                    "standard_kl_loss": mean_standard_kl
-                })
-            # Optionally log to CSV as well
-            standard_elbo_storer = {
-                "standard_elbo": [mean_standard_elbo],
-                "standard_recon_loss": [mean_standard_recon],
-                "standard_kl_loss": [mean_standard_kl]
-            }
-            self.losses_logger.log(epoch, standard_elbo_storer)
-            self.model.train()
+            # Compute standard ELBO on validation set at intervals
+            elbo_start_epoch = 10  # Start after 10 epochs
+            elbo_interval = 5      # Every 5 epochs
+            if val_loader is not None and (epoch + 1) >= elbo_start_epoch and ((epoch + 1 - elbo_start_epoch) % elbo_interval == 0):
+                standard_val_elbo_results = self.compute_standard_elbo(val_loader)
+                import numpy as np
+                batch_size = val_loader.batch_size
+                mean_standard_elbo = np.mean([r['loss'] for r in standard_val_elbo_results]) / batch_size
+                mean_standard_recon = np.mean([r['recon_loss'] for r in standard_val_elbo_results]) / batch_size
+                mean_standard_kl = np.mean([r['kl_loss'] for r in standard_val_elbo_results]) / batch_size
+                print(f"Standard ELBO (beta=1) on validation set: {mean_standard_elbo:.2f}")
+                if wandb_log:
+                    wandb.log({
+                        "epoch": epoch,
+                        "standard_elbo": mean_standard_elbo,
+                        "standard_recon_loss": mean_standard_recon,
+                        "standard_kl_loss": mean_standard_kl
+                    })
+                # Optionally log to CSV
+                standard_elbo_storer = {
+                    "standard_elbo": [mean_standard_elbo],
+                    "standard_recon_loss": [mean_standard_recon],
+                    "standard_kl_loss": [mean_standard_kl]
+                }
+                self.losses_logger.log(epoch, standard_elbo_storer)
 
             if epoch % checkpoint_every == 0:
                 save_model(self.model,self.save_dir,
