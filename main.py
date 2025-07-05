@@ -191,10 +191,16 @@ def main(args):
 
         create_safe_directory(exp_dir, logger=logger)
 
-        train_loader, raw_dataset, viz_loader, test_loader = get_dataloaders(args.dataset,
-                                        batch_size=args.batch_size, shuffle=False)
+        # Use train/val split from get_dataloaders
+        train_loader, val_loader, dataset_obj, viz_loader, test_loader = get_dataloaders(
+            args.dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            val_split=0.1  # 10% for validation, adjust as needed
+        )
         logger.info("Train {} with {} samples".format(args.dataset, len(train_loader.dataset)))
-        img_size = train_loader.dataset.img_size
+        logger.info("Validation set: {} samples".format(len(val_loader.dataset)))
+        img_size = dataset_obj.img_size
         beta = args.loss_b
 
         # Set beta for model initialization: use beta_start if annealing, else loss_b
@@ -220,13 +226,16 @@ def main(args):
         
         gif_visualizer = GifTraversalsTraining(model, args.dataset, exp_dir)
 
-        trainer = Trainer(model, optimizer,  scheduler = scheduler, device = device, logger = logger, gif_visualizer=gif_visualizer, metrics_freq=args.metrics_freq,
-                        sample_size=args.sample_size, save_dir = exp_dir, dataset_size=args.dataset_size, all_latents=args.all_latents, seed=args.seed, dataset_name = args.dataset)
+        trainer = Trainer(
+            model, optimizer, scheduler=scheduler, device=device, logger=logger, gif_visualizer=gif_visualizer, metrics_freq=args.metrics_freq,
+            sample_size=args.sample_size, save_dir=exp_dir, dataset_size=args.dataset_size, all_latents=args.all_latents, seed=args.seed, dataset_name=args.dataset,
+            beta_start=args.beta_start, beta_end=args.beta_end, beta_anneal_epochs=args.beta_anneal_epochs
+        )
 
+        # Pass val_loader to Trainer
+        trainer(train_loader, epochs=args.epochs, wandb_log=args.wandb_log, val_loader=val_loader)
 
-        trainer(train_loader, epochs=args.epochs, wandb_log= args.wandb_log)
-
-        latents_plots, traversal_plots, dim_reduction_models = {}, {}, {}
+        latents_plots, traversal_plots, dim_reduction_models = { }, { }, { }
     
         try:
             # Remove latent_viz and dim_reduction_models (PCA/tSNE) code
