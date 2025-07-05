@@ -33,7 +33,8 @@ class Trainer():
     def __init__(self, model, optimizer, scheduler = None, device=torch.device("cpu"),
                 logger=logging.getLogger(__name__), metrics_freq =-2, sample_size = 64,
                 save_dir ="results",
-                dataset_size = 1000, all_latents = True, gif_visualizer = None, seed = None, dataset_name = None):
+                dataset_size = 1000, all_latents = True, gif_visualizer = None, seed = None, dataset_name = None,
+                beta_start=1.0, beta_end=1.0, beta_anneal_epochs=None):
         """
         Initialize the Trainer.
 
@@ -51,6 +52,9 @@ class Trainer():
             gif_visualizer: Optional visualizer for GIFs.
             seed: Random seed.
             dataset_name: Name of the dataset.
+            beta_start: Initial beta value for annealing schedule.
+            beta_end: Final beta value for annealing schedule.
+            beta_anneal_epochs: Number of epochs over which to anneal beta (defaults to total epochs if None).
         """
         self.device = device
         self.model = model.to(self.device)
@@ -66,6 +70,10 @@ class Trainer():
         self.gif_visualizer = gif_visualizer
         self.seed = seed
         self.dataset_name = dataset_name
+        # Beta scheduling attributes
+        self.beta_start = beta_start
+        self.beta_end = beta_end
+        self.beta_anneal_epochs = beta_anneal_epochs
 
 
 
@@ -124,6 +132,8 @@ class Trainer():
 
             self.logger.info('Epoch: {} Average loss per image: {:.2f}'.format(epoch + 1,
                                                                                mean_epoch_loss))
+            if wandb_log:
+                wandb.log({"epoch": epoch, "beta": getattr(self.model, "beta", None)})
 
             self.losses_logger.log(epoch, storer)
   
@@ -281,22 +291,3 @@ def save_model(model, directory, metadata=None, filename=MODEL_FILENAME):
 def mean(l):
     """Compute the mean of a list."""
     return sum(l) / len(l)
-
-def get_beta(epoch, beta_start, beta_end, anneal_epochs):
-    """
-    Compute the annealed beta value for the current epoch.
-
-    Args:
-        epoch: Current epoch number.
-        beta_start: Initial beta value.
-        beta_end: Final beta value.
-        anneal_epochs: Number of epochs over which to anneal beta.
-    Returns:
-        The annealed beta value.
-    """
-    if anneal_epochs == 0:
-        return beta_end
-    if epoch >= anneal_epochs:
-        return beta_end
-    # Linear schedule
-    return beta_start + (beta_end - beta_start) * (epoch / anneal_epochs)
