@@ -27,3 +27,4 @@ wandb/
 .vscode/
 .env
 /data/mnist
+/data/cifar10
