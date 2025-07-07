@@ -152,9 +152,9 @@ def main(args):
     # Dynamic wandb run naming
     if args.beta_start == 1.0 and args.beta_end == 1.0:
         run_name = f"StandardVAE_{args.dataset}_z={args.latent_dim}_epochs={args.epochs}"
-    elif args.beta_start == args.beta_end and args.beta_start > 1.0:
+    elif args.beta_start == args.beta_end:
         run_name = f"BetaVAE_beta={args.beta_start}_{args.dataset}_z={args.latent_dim}_epochs={args.epochs}"
-    elif args.beta_start > 1.0 and args.beta_end == 1.0:
+    elif args.beta_start != args.beta_end:
         run_name = f"AnnealedBeta_beta={args.beta_start}_to_1_{args.dataset}_z={args.latent_dim}_epochs={args.epochs}"
     else:
         run_name = f"VAE_beta={args.beta_start}_to_{args.beta_end}_{args.dataset}_z={args.latent_dim}_epochs={args.epochs}"
