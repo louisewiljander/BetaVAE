@@ -87,7 +87,7 @@ class Evaluator():
         
         if dataset_name in ['dsprites', 'mpi3dtoy', '3dshapes']: 
             self.logger.info("Computing the disentanglement metric")
-            method_names = ["VAE", "ICA"]
+            method_names = ["VAE"]  # Only use VAE, remove ICA/PCA
             if self.multiple_l is False:
                 accuracies = self._disentanglement_metric(dataloader.dataset, method_names, sample_size=self.sample_size, n_epochs = 10000, dataset_size=self.dataset_size)
             else:
