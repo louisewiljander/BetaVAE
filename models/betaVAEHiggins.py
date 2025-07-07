@@ -131,7 +131,12 @@ class BetaVAEHiggins(BaseVAE):
         self.num_iter += 1
         batch_size = x.size(0)
         if self.latent_dist == 'bernoulli':
-            recon_loss =F.binary_cross_entropy(recon, x, reduction='sum')
+            # Debug: check recon range
+            if not torch.all((recon >= 0) & (recon <= 1)):
+                print(f"[ERROR] recon out of bounds: min={recon.min().item()}, max={recon.max().item()}")
+                # Optionally, raise for strict debugging
+                raise ValueError(f"recon out of bounds: min={recon.min().item()}, max={recon.max().item()}")
+            recon_loss = F.binary_cross_entropy(recon, x, reduction='sum')
         elif self.latent_dist  == "gaussian":
         # loss in [0,255] space but normalized by 255 to not be too big
             recon_loss = F.mse_loss(recon * 255, x * 255, reduction="sum") / 255
