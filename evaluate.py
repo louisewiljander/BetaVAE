@@ -78,7 +78,7 @@ class Evaluator():
 
     def compute_metrics(self, dataloader, dataset_name = None):
         
-        accuracies, aam, mig, fid = None, None, None, None
+        accuracies, mig = None, None
         #TODO: dont run if on collab
         
         ### Commented out code for FID computation, uncomment if needed ###
@@ -125,11 +125,9 @@ class Evaluator():
 
             metric_helpers = {'marginal_entropies': H_z, 'cond_entropies': H_zCv}
             mig = self._mutual_information_gap(sorted_mut_info, lat_sizes, storer=metric_helpers).item()
-            aam = self._axis_aligned_metric(sorted_mut_info, storer=metric_helpers).item()
         
-
-        metrics = {'DM': accuracies, 'MIG': mig, 'AAM': aam, 'FID': fid}
-        print(f"Evaluated metrics for {dataset_name} as: {metrics}")
+        metrics = {'DM': accuracies, 'MIG': mig}
+        print(f"Evaluated disentanglement metrics for {dataset_name} as: {metrics}")
         self.model.train()
         return metrics
         
@@ -181,19 +179,15 @@ class Evaluator():
         for model_class in ["linear", "nonlinear", "logreg", "rf"]:
             if model_class in ["linear", "nonlinear"]:
                 model = Classifier(latent_dim,hidden_dim,len(dataset.lat_sizes), use_non_linear= True if model_class =="nonlinear" else False)
-                
                 model.to(self.device)
                 model.train()
 
-                #log softmax with NLL loss 
+                # log softmax with NLL loss 
                 criterion = torch.nn.NLLLoss()
                 optim = torch.optim.Adagrad(model.parameters(), lr=0.01 if model_class =="linear" else 0.001, weight_decay=0 if model_class == "linear" else 1e-4)
                 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, 'min', patience=5000, min_lr=0.00001)
 
                 for method in tqdm(methods.keys(), desc = "Training classifiers for the Higgins metric"):
-                    if method == "ICA":
-                        optim = torch.optim.Adam(model.parameters(), lr=1 if model_class =="linear" else 0.001, weight_decay=0 if model_class == "linear" else 1e-4)
-                        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, 'min', patience=5000, min_lr=0.00001)
                     X_train, Y_train = data_train[method]
                     X_train, Y_train = torch.tensor(X_train, dtype=torch.float32), torch.tensor(Y_train, dtype=torch.long)
                     X_train = X_train.to(self.device)
@@ -339,19 +333,6 @@ class Evaluator():
             storer["mig"] = mig
 
         return mig
-
-    def _axis_aligned_metric(self, sorted_mut_info, storer=None):
-        """Compute the proposed axis aligned metrics."""
-        numerator = (sorted_mut_info[:, 0] - sorted_mut_info[:, 1:].sum(dim=1)).clamp(min=0)
-        aam_k = numerator / sorted_mut_info[:, 0]
-        aam_k[torch.isnan(aam_k)] = 0
-        aam = aam_k.mean()  # mean over factor of variations
-
-        if storer is not None:
-            storer["aam_k"] = aam_k
-            storer["aam"] = aam
-
-        return aam
 
     def _compute_q_zCx(self, dataloader):
         """Compute the empiricall disitribution of q(z|x).
