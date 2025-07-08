@@ -18,15 +18,15 @@ api = wandb.Api()
 runs = api.runs(f"{entity}/{project}")
 
 # Set this to filter runs by dataset (e.g., 'mnist', 'dsprites', 'cifar10')
-DATASET_FILTER = 'mnist'  # Set to None to disable filtering
+DATASET_FILTER = 'dsprites'  # Set to None to disable filtering
 
 # Metrics to fetch from each run
 metrics = ['standard_elbo', 'standard_kl_loss', 'standard_recon_loss', 'beta', 
            'beta_start', 'beta_end','val_kl_loss', 'val_recon_loss', 'val_loss', 'epoch', '_step']
 plot_metrics = [
     ("val_loss", "Total Loss", "Loss"),
-    ("val_kl_loss", "KL Loss", "KL"),
-    ("val_recon_loss", "Reconstruction Loss ", "Recon Loss"),
+    ("val_kl_loss", "Distribution (KL) Loss", "Loss"),
+    ("val_recon_loss", "Reconstruction Loss ", "Loss"),
 ]
 
 # Ensure plots directory exists
@@ -68,8 +68,12 @@ for run in runs:
     run_data.append({
         "label": label,
         "history": history,
-        "run_id": run.id
+        "run_id": run.id,
+        "beta_start_val": beta_start_val
     })
+
+# Sort run_data by beta_start_val descending (highest first)
+run_data.sort(key=lambda r: r["beta_start_val"], reverse=True)
 
 # Build color mapping for beta_start
 unique_beta_starts = sorted(set([r['label'].split('=')[1].split('→')[0] if 'β=' in r['label'] else r['label'] for r in run_data]))
