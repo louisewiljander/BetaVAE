@@ -18,15 +18,15 @@ api = wandb.Api()
 runs = api.runs(f"{entity}/{project}")
 
 # Set this to filter runs by dataset (e.g., 'mnist', 'dsprites', 'cifar10')
-DATASET_FILTER = 'dsprites'  # Set to None to disable filtering
+DATASET_FILTER = 'mnist'  # Set to None to disable filtering
 
 # Metrics to fetch from each run
 metrics = ['standard_elbo', 'standard_kl_loss', 'standard_recon_loss', 'beta', 
            'beta_start', 'beta_end','val_kl_loss', 'val_recon_loss', 'val_loss', 'epoch', '_step']
 plot_metrics = [
-    ("val_loss", "Total Loss", "Loss"),
-    ("val_kl_loss", "Distribution (KL) Loss", "Loss"),
-    ("val_recon_loss", "Reconstruction Loss ", "Loss"),
+    ("val_loss", f"Total Loss ({DATASET_FILTER})", "Loss"),
+    ("val_kl_loss", f"Distribution (KL) Loss ({DATASET_FILTER})", "Loss"),
+    ("val_recon_loss", f"Reconstruction Loss ({DATASET_FILTER})", "Loss"),
 ]
 
 # Ensure plots directory exists
@@ -72,13 +72,24 @@ for run in runs:
         "beta_start_val": beta_start_val
     })
 
+# Global color mapping for beta_start
+all_beta_starts = set()
+for run in runs:
+    config = run.config
+    beta_start_val = config.get('beta_start', config.get('beta', 1.0))
+    # Format beta as float if between 0 and 1, else as int
+    def beta_fmt(val):
+        return f"{val:.1f}" if 0 < val < 1 else f"{int(round(val))}"
+    beta_start = beta_fmt(beta_start_val)
+    all_beta_starts.add(beta_start)
+# Sort in descending order for color assignment
+unique_beta_starts = sorted(all_beta_starts, reverse=True)
+color_maps = [plt.cm.Blues, plt.cm.Greens, plt.cm.Reds, plt.cm.Greys]
+base_colors = {b: color_maps[i % len(color_maps)] for i, b in enumerate(unique_beta_starts)}
+
 # Sort run_data by beta_start_val descending (highest first)
 run_data.sort(key=lambda r: r["beta_start_val"], reverse=True)
 
-# Build color mapping for beta_start
-unique_beta_starts = sorted(set([r['label'].split('=')[1].split('→')[0] if 'β=' in r['label'] else r['label'] for r in run_data]))
-color_maps = [plt.cm.Blues, plt.cm.Greens, plt.cm.Reds, plt.cm.Purples, plt.cm.Oranges, plt.cm.Greys]
-base_colors = {b: color_maps[i % len(color_maps)] for i, b in enumerate(unique_beta_starts)}
 beta_start_to_runs = defaultdict(list)
 for i, r in enumerate(run_data):
     b = r['label'].split('=')[1].split('→')[0] if 'β=' in r['label'] else r['label']
@@ -118,13 +129,13 @@ for metric, title, ylabel in plot_metrics:
         if col:
             valid = hist[[x_axis, col]].dropna()
             if not valid.empty:
-                # Assign color based on beta_start and shade based on run index
+                # Assign color based on beta_start (no shade variation)
                 b = run['label'].split('=')[1].split('→')[0] if 'β=' in run['label'] else run['label']
                 cmap = base_colors[b]
-                shade_idx = beta_start_to_runs[b].index(run_idx)
-                n_shades = len(beta_start_to_runs[b])
-                color = cmap(0.4 + 0.5 * shade_idx / max(n_shades-1,1)) if n_shades > 1 else cmap(0.7)
-                plt.plot(valid[x_axis], valid[col], label=run["label"], color=color)
+                color = cmap(0.7)  # Always use the same shade for all runs with the same beta_start
+                # Determine linestyle: dashed for annealed, solid for fixed
+                linestyle = '--' if run['label'].startswith('Annealed β=') else '-'
+                plt.plot(valid[x_axis], valid[col], label=run["label"], color=color, linestyle=linestyle)
                 plt.plot(valid[x_axis].iloc[-1], valid[col].iloc[-1], marker='o', color=color, markersize=4)
                 # Annotate final value next to the last point
                 final_x = valid[x_axis].iloc[-1]
