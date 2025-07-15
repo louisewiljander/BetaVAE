@@ -1,6 +1,8 @@
 # Beta-VAE Experiments
 
-This repository provides a framework for training, evaluating, and comparing standard VAE, fixed Beta-VAE, and annealed Beta-VAE models on datasets such as MNIST and dSprites. The codebase supports flexible beta scheduling, robust logging, and easy experiment management.
+This codebase is an adaptation of the code from Fil et al. (2021) [https://github.com/filangel/understanding-beta-vae](https://github.com/filangel/understanding-beta-vae).
+
+This repository provides a framework for training, evaluating, and comparing standard VAE, fixed Beta-VAE, and annealed Beta-VAE models on datasets such as MNIST and dSprites.
 
 ## Requirements
 
@@ -42,28 +44,14 @@ python main.py --dataset mnist --epochs 5 --beta_start 4.0 --beta_end 1.0 --beta
 
 To run on dSprites, change `--dataset mnist` to `--dataset dsprites`.
 
-### 4. Skipping FID/InceptionV3 Evaluation
-
-By default, FID/InceptionV3 evaluation is skipped for faster runs. If you want to enable it, check the relevant flags in `main.py`.
-
 ## Logging and Results
-
-- Training losses (ELBO, recon loss, KL) are logged to `results/train_losses.log` in CSV format for easy plotting.
 - If using wandb, all metrics and beta schedules are logged for experiment tracking.
-- Model checkpoints are saved in the `results/` directory.
 
 ## Plotting
 
-You can use the provided plotting scripts (e.g., `plot_elbo_wandb.py`) to visualize ELBO and other metrics. The CSV log format is compatible with most plotting tools.
+You can use the provided plotting scripts (e.g., `plot_experiment_results.py` to plot training runs. The plotting scripts support both individual run visualization and aggregated (mean ± std) plots across multiple runs.
 
 ## Customization
 
 - Beta scheduling is handled via the `--beta_start`, `--beta_end`, and `--beta_anneal_epochs` arguments.
 - All loss components are available for analysis and plotting.
-- The codebase is modular and easy to extend for new datasets or VAE variants.
-
-## Troubleshooting
-
-- Ensure your dataset is available and preprocessed as expected (images resized to 64x64).
-- For quick tests, reduce the number of epochs or use a smaller dataset.
-- If you encounter errors, check the logs and ensure all dependencies are installed.
