@@ -1,6 +1,6 @@
 # Beta-VAE Experiments
 
-This codebase is an adaptation of the code from Fil et al. (2021) [https://github.com/filangel/understanding-beta-vae](https://github.com/filangel/understanding-beta-vae).
+This codebase is an adaptation of the code from Fil et al. (2021) [https://github.com/jonaswildberger/BetaVAE/tree/main](https://github.com/jonaswildberger/BetaVAE/tree/main).
 
 This repository provides a framework for training, evaluating, and comparing standard VAE, fixed Beta-VAE, and annealed Beta-VAE models on datasets such as MNIST and dSprites.
 
