@@ -29,7 +29,7 @@ plot_metrics = [
     ("val_loss", f"β-loss ({DATASET_FILTER})", "β-loss"),
     ("val_kl_loss", f"Distribution (KL) Loss ({DATASET_FILTER})", "Loss"),
     ("val_recon_loss", f"Reconstruction Loss ({DATASET_FILTER})", "Loss"),
-    ("elbo", f"ELBO ({DATASET_FILTER})", "ELBO"),
+    ("elbo", f"ELBO ({DATASET_FILTER})", "Negative ELBO = Reconstruction loss + KL loss (β = 1)"),
 ]
 
 # Ensure plots directory exists
@@ -152,19 +152,19 @@ for i, r in enumerate(run_data):
     b = r['label'].split('=')[1].split('→')[0] if 'β=' in r['label'] else r['label']
     beta_start_to_runs[b].append(i)
 
-mpl.rcParams.update({
-    "font.family": "serif",
-    "font.serif": "Times New Roman",
-    "axes.labelsize": 13,
-    "axes.titlesize": 15,
-    "xtick.labelsize": 11,
-    "ytick.labelsize": 11,
-    "legend.fontsize": 9,
-    "lines.linewidth": 2,
-    "lines.markersize": 7,
-    "axes.grid": True,
-    "grid.alpha": 0.2,
-})
+# mpl.rcParams.update({
+#     "font.family": "serif",
+#     "font.serif": "Times New Roman",
+#     "axes.labelsize": 13,
+#     "axes.titlesize": 15,
+#     "xtick.labelsize": 11,
+#     "ytick.labelsize": 11,
+#     "legend.fontsize": 9,
+#     "lines.linewidth": 2,
+#     "lines.markersize": 7,
+#     "axes.grid": True,
+#     "grid.alpha": 0.2,
+# })
 
 sns.set(style="white")
 font_prop = FontProperties(family='serif')
@@ -391,52 +391,6 @@ for metric, title, ylabel in plot_metrics:
     plt.savefig(out_path_png, dpi=300, bbox_inches='tight')
 print(f"Plots saved as PNG files in {plots_dir}.")
 
-
-# --- Bar chart: Mean final_standard_elbo for each beta group (fixed or annealed) ---
-from collections import defaultdict
-elbo_group_data = defaultdict(list)  # {label: [final_standard_elbo values]}
-color_group = {}
-for run in run_data:
-    hist = run['history']
-    if 'final_standard_elbo' in hist and not hist['final_standard_elbo'].dropna().empty:
-        final_elbo = hist['final_standard_elbo'].dropna().iloc[-1]
-        label = run['label']
-        b = label.split('=')[1].split('→')[0] if 'β=' in label else label
-        elbo_group_data[label].append(final_elbo)
-        if label not in color_group:
-            color_group[label] = base_colors[b](0.7) if b in base_colors else plt.cm.Blues(0.7)
-
-# Compute mean per group
-bar_data = []
-for label, values in elbo_group_data.items():
-    mean_val = np.mean(values)
-    color = color_group[label]
-    bar_data.append((label, mean_val, color))
-
-# Sort by mean ELBO descending
-bar_data.sort(key=lambda x: x[1], reverse=True)
-
-if bar_data:
-    plt.figure(figsize=(max(6, len(bar_data)*0.9), 4.2))
-    labels = [x[0] for x in bar_data]
-    values = [x[1] for x in bar_data]
-    colors = [x[2] for x in bar_data]
-    bars = plt.bar(labels, values, color=colors, edgecolor='black', alpha=0.85)
-    plt.ylabel('Mean Final Validation ELBO', fontname='Times New Roman', fontsize=13)
-    plt.xlabel('Model', fontname='Times New Roman', fontsize=13)
-    plt.title('Mean Final Validation ELBO by Model', fontname='Times New Roman', fontweight='bold')
-    plt.xticks(rotation=30, ha='right', fontname='Times New Roman', fontsize=10)
-    plt.yticks(fontname='Times New Roman', fontsize=10)
-    plt.grid(axis='y', color='gray', alpha=0.08, linewidth=1, linestyle='-')
-    # Annotate each bar
-    for bar, val in zip(bars, values):
-        plt.text(bar.get_x() + bar.get_width()/2, bar.get_height(), f'{val:.2f}', ha='center', va='bottom', fontsize=10, fontname='Times New Roman', weight='bold', color='black', bbox=dict(facecolor='white', edgecolor='none', alpha=0.7, pad=0.5))
-    plt.tight_layout()
-    out_path_bar = os.path.join(plots_dir, f"final_val_elbo_bar_{DATASET_FILTER}.png")
-    plt.savefig(out_path_bar, dpi=300, bbox_inches='tight')
-    print(f"Bar chart saved as {out_path_bar}.")
-
-
 # --- Aggregated line plot: Mean ELBO (val_recon_loss + val_kl_loss) per epoch, grouped by beta_start, for each dataset (last 3 runs) ---
 from collections import defaultdict
 elbo_grouped = defaultdict(list)  # {(dataset, beta_start): list of (beta_end, metrics_dict)}
@@ -481,9 +435,9 @@ for (dataset, beta_start), group in elbo_grouped.items():
                     break
         plotted = True
     if plotted:
-        plt.title(f'Aggregated Validation ELBO (recon + KL) per Epoch\nβ={beta_start_fmt} (fixed & annealed) | Dataset: {dataset}', fontname='Times New Roman', fontweight='bold')
+        plt.title(f'Mean Negative Validation ELBO (Recon + KL, β = 1) per Epoch\nβ={beta_start_fmt} (fixed & annealed) | Dataset: {dataset}', fontname='Times New Roman', fontweight='bold')
         plt.xlabel('Epoch', fontname='Times New Roman', fontsize=11)
-        plt.ylabel('ELBO', fontname='Times New Roman', fontsize=11)
+        plt.ylabel('Negative ELBO = Reconstruction loss + KL loss (β = 1)', fontname='Times New Roman', fontsize=11)
         plt.xlim(min_epoch, max_epoch)
         plt.xticks(epoch_ticks, fontname='Times New Roman', fontsize=10)
         plt.yticks(fontname='Times New Roman', fontsize=10)
@@ -492,4 +446,4 @@ for (dataset, beta_start), group in elbo_grouped.items():
         plt.tight_layout(rect=[0, 0, 0.95, 1])
         out_path_elbo_line = os.path.join(plots_dir, f"val_elbo_per_epoch_{dataset}_beta{beta_start_fmt}_grouped.png")
         plt.savefig(out_path_elbo_line, dpi=300, bbox_inches='tight')
-        print(f"Aggregated ELBO per-epoch line plot saved as {out_path_elbo_line}.")
+        print(f"Mean ELBO per-epoch line plot saved as {out_path_elbo_line}.")
