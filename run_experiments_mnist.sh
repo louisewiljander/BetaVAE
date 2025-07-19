@@ -1,7 +1,6 @@
 #!/bin/bash
 # Run Beta-VAE experiments with fixed and annealed beta, all with the same seed
 
-SEED=2025
 LATENT_DIM=10
 EPOCHS=20
 DATASET=mnist
@@ -26,3 +25,10 @@ python main.py --beta_start 0.1 --beta_end 1 --beta_anneal_epochs $EPOCHS --epoc
 
 # Plotting the results
 #python plot_experiment_results.py
+
+# Fixed Beta=1 (Standard VAE)
+python main.py --beta_start 1 --beta_end 1 --epochs $EPOCHS --latent-dim $LATENT_DIM --dataset $DATASET --seed 33
+python main.py --beta_start 1 --beta_end 1 --epochs $EPOCHS --latent-dim $LATENT_DIM --dataset $DATASET --seed 1234
+python main.py --beta_start 1 --beta_end 1 --epochs $EPOCHS --latent-dim $LATENT_DIM --dataset $DATASET --seed 2345
+
+
