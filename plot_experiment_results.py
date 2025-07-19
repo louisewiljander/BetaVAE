@@ -328,7 +328,7 @@ for dataset, group in elbo_grouped.items():
         epoch_ticks = list(range(min_epoch, max_epoch + 2))
     if plotted:
         plt.xlabel('Epoch', fontname='Times New Roman', fontsize=12)
-        plt.ylabel('Negative ELBO = Reconstruction loss + KL loss)', fontname='Times New Roman', fontsize=14)
+        plt.ylabel('Negative ELBO = Reconstruction loss + KL loss', fontname='Times New Roman', fontsize=12)
         if DATASET_FILTER == "dsprites":
             plt.xlim(1, 10.5)
             plt.xticks([x for x in range(1, 11)], [str(x) for x in range(1, 11)], fontname='Times New Roman', fontsize=10)
