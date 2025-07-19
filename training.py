@@ -231,7 +231,6 @@ class Trainer():
     def compute_standard_elbo(self, data_loader):
         """
         Evaluate the model on the given data_loader with beta=1 (standard ELBO), no gradients.
-        Returns a list of dicts with 'loss', 'recon_loss', 'kl_loss' for each batch.
         """
         results = []
         was_training = self.model.training

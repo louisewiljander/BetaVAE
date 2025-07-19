@@ -138,8 +138,6 @@ for run in runs:
     all_beta_starts.add(beta_start)
 # Sort in descending order for color assignment
 unique_beta_starts = sorted(all_beta_starts, reverse=True)
-color_maps = [plt.cm.Blues, plt.cm.Greens, plt.cm.Reds, plt.cm.Greys]
-base_colors = {b: color_maps[i % len(color_maps)] for i, b in enumerate(unique_beta_starts)}
 # Explicit RGBA color mapping for each beta_start value
 explicit_colors = {
     "8": (0.1791464821222607, 0.49287197231833907, 0.7354248366013072, 1.0),
@@ -253,17 +251,6 @@ for metric, title, ylabel in plot_metrics:
         leg._legend_box.align = "left"
     else:
         plt.legend().remove()
-    plt.tight_layout(rect=[0, 0, 0.7, 1])
-    out_path_png = os.path.join(plots_dir, f"{metric}_{DATASET_FILTER}.png")
-    plt.savefig(out_path_png, dpi=300, bbox_inches='tight')
-
-# --- Mean Beta-Loss Plots ---
-for metric, title, ylabel in plot_metrics:
-    plt.figure(figsize=(7, 4.2))
-    plotted = False
-    if PLOT_AGGREGATED_ONLY:
-        # Plot only aggregated results (mean for each group, per epoch)
-        # Collect all lines to sort legend later
     plt.xlabel("Epoch", fontname='Times New Roman', fontsize=12)
     plt.ylabel(ylabel, fontname='Times New Roman', fontsize=12)
     if DATASET_FILTER == "dsprites":
