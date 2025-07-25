@@ -60,25 +60,39 @@ for key, run_list in grouped_runs.items():
             try:
                 hist = run.history(pandas=True)
                 x_axis = "epoch" if "epoch" in hist else "_step"
-                col = metric if metric in hist else None
-                if col is None:
-                    matches = [c for c in hist.columns if metric.lower() == c.lower()]
-                    if not matches:
-                        matches = [c for c in hist.columns if metric.lower() in c.lower()]
-                    if matches:
-                        col = matches[0]
-                if col:
-                    valid = hist[[x_axis, col]].dropna()
-                    for _, row in valid.iterrows():
-                        epoch = int(row[x_axis])
-                        epoch_vals[epoch].append(row[col])
+                
+                # Special handling for ELBO (sum of recon_loss and kl_loss)
+                if metric == "elbo":
+                    if 'val_recon_loss' in hist and 'val_kl_loss' in hist:
+                        valid = hist[[x_axis, 'val_recon_loss', 'val_kl_loss']].dropna()
+                        for _, row in valid.iterrows():
+                            epoch = int(row[x_axis])
+                            elbo_val = row['val_recon_loss'] + row['val_kl_loss']
+                            epoch_vals[epoch].append(elbo_val)
+                else:
+                    # Regular metric handling
+                    col = metric if metric in hist else None
+                    if col is None:
+                        matches = [c for c in hist.columns if metric.lower() == c.lower()]
+                        if not matches:
+                            matches = [c for c in hist.columns if metric.lower() in c.lower()]
+                        if matches:
+                            col = matches[0]
+                    if col:
+                        valid = hist[[x_axis, col]].dropna()
+                        for _, row in valid.iterrows():
+                            epoch = int(row[x_axis])
+                            epoch_vals[epoch].append(row[col])
             except Exception as e:
                 print(f"[ERROR] Could not fetch history for run {run.id}: {e}")
         metric_epoch_stats = {}
         for epoch, vals in epoch_vals.items():
             if vals:
                 mean_val = np.mean(vals)
-                std_val = np.std(vals)
+                if len(vals) > 1:
+                    std_val = np.std(vals, ddof=1)
+                else:
+                    std_val = 0.0  # Avoid RuntimeWarning for single value
                 metric_epoch_stats[epoch] = (mean_val, std_val, len(vals))
         if metric_epoch_stats:
             aggregated_results[key][metric] = metric_epoch_stats
@@ -147,9 +161,6 @@ explicit_colors = {
     "0.1": (0.8871510957324106, 0.3320876585928489, 0.03104959630911188, 1.0)
 }
 base_colors = {b: explicit_colors.get(str(b), (0.5, 0.5, 0.5, 1.0)) for b in unique_beta_starts}
-print("Base color mapping for beta_start values:")
-for k, v in base_colors.items():
-    print(f"  beta_start: {k}, color: {v}")
 
 # Add a marker for each epoch
 marker_styles = ["o", "s", "D", "^", "*"]
@@ -206,6 +217,14 @@ for metric, title, ylabel in plot_metrics:
         plot_lines.append(line)
         legend_labels.append(label)
         legend_betas.append(float(beta_start))
+        # Store the epoch_stats and key for this line
+        line_info = {
+            'epoch_stats': epoch_stats,
+            'key': (dataset, beta_start, beta_end),
+            'means': means,
+            'epochs': epochs
+        }
+        line._line_info = line_info  # Attach info directly to the line object
         plotted = True
     # Sort legend entries: highest to lowest beta_start, Standard VAE at the bottom
     if plot_lines:
@@ -216,15 +235,26 @@ for metric, title, ylabel in plot_metrics:
                 sort_key = float('-inf')  # Always last
             else:
                 sort_key = beta
-            legend_tuples.append((sort_key, line, label))
+            # Also store the corresponding epoch_stats and metrics_dict for this line
+            stats_key = (dataset, beta, beta)  # Simplified key, assuming no annealing for now
+            if label == "Standard VAE":
+                stats_key = (dataset, 1.0, 1.0)
+            elif "→" in label:
+                beta_start = float(label.split('=')[1].split('→')[0])
+                beta_end = float(label.split('→')[1])
+                stats_key = (dataset, beta_start, beta_end)
+            legend_tuples.append((sort_key, line, label, stats_key))
+        
         # Sort by sort_key descending
         legend_tuples_sorted = sorted(legend_tuples, key=lambda x: x[0], reverse=True)
         # Unpack sorted
-        _, plot_lines_sorted, legend_labels_sorted = zip(*legend_tuples_sorted)
+        _, plot_lines_sorted, legend_labels_sorted, stats_keys_sorted = zip(*legend_tuples_sorted)
         plt.cla()  # Clear current axes
+        
         # Use the same color scheme for all plots, based on beta_start_fmt
         for i, line in enumerate(plot_lines_sorted):
             label = legend_labels_sorted[i]
+            stats_key = stats_keys_sorted[i]
             if label == "Standard VAE":
                 beta_key = "1"
             elif label.startswith("β="):
@@ -235,13 +265,29 @@ for metric, title, ylabel in plot_metrics:
                 beta_key = str(i)
             color = base_colors.get(beta_key, (0.5, 0.5, 0.5, 1.0))
             plt.plot(line.get_xdata(), line.get_ydata(), label=label, color=color, marker=line.get_marker(), linestyle=line.get_linestyle(), linewidth=1.3, markersize=4.5)
+            
             # Add value label for final value (last epoch) with offset
             xdata = line.get_xdata()
             ydata = line.get_ydata()
             if len(xdata) > 0 and len(ydata) > 0:
                 final_x = xdata[-1]
                 final_y = ydata[-1]
-                plt.text(final_x + 0.3, final_y, f"{final_y:.2f}", color=color, fontsize=8, fontname='Times New Roman', va='center', ha='left', weight='bold', bbox=dict(facecolor='white', edgecolor='none', alpha=0.7, pad=0.5))
+                final_epoch = int(final_x)
+                # Use the epoch_stats stored with the line
+                if hasattr(line, '_line_info'):
+                    line_info = line._line_info
+                    epoch_stats = line_info['epoch_stats']
+                    if final_epoch in epoch_stats:
+                        mean, std, n = epoch_stats[final_epoch]
+                        # Print values for verification
+                    print(f"[DEBUG] {label} | Epoch {final_epoch} | final_y={final_y:.4f} | mean={mean:.4f}")
+                    if n > 1:
+                        se = std / np.sqrt(n) if n > 0 else 0.0
+                        print(f"[{label}] Epoch {final_epoch}: mean={mean:.4f}, std={std:.4f}, n={n}, SE={se:.4f}")
+                        plt.text(final_x + 0.3, final_y, f"{final_y:.2f}", color=color, fontsize=8, fontname='Times New Roman', va='center', ha='left', weight='bold', bbox=dict(facecolor='white', edgecolor='none', alpha=0.7, pad=0.5))
+                    else:
+                        print(f"[{label}] Epoch {final_epoch}: mean={mean:.4f}, std={std:.4f}, n={n}, SE=NA (n<=1)")
+                        plt.text(final_x + 0.3, final_y, f"{final_y:.2f}", color=color, fontsize=8, fontname='Times New Roman', va='center', ha='left', weight='bold', bbox=dict(facecolor='white', edgecolor='none', alpha=0.7, pad=0.5))
 
         fig = plt.gcf()
         fig.set_size_inches(8, 4.2)
@@ -254,10 +300,10 @@ for metric, title, ylabel in plot_metrics:
     plt.xlabel("Epoch", fontname='Times New Roman', fontsize=12)
     plt.ylabel(ylabel, fontname='Times New Roman', fontsize=12)
     if DATASET_FILTER == "dsprites":
-        plt.xlim(1, 10.5)
-        plt.xticks([x for x in range(1, 11)], [str(x) for x in range(1, 11)], fontname="Times New Roman", fontsize=10)
-        plt.ylim(40, 200)
-        plt.yticks(np.arange(40, 201, 20), fontname="Times New Roman", fontsize=10)
+        plt.xlim(0, 10)
+        plt.xticks([x for x in range(0, 10)], [str(x+1) for x in range(0, 10)], fontname="Times New Roman", fontsize=10)  # Label as 1-10
+        plt.ylim(0, 140)
+        plt.yticks(np.arange(0, 141, 20), fontname="Times New Roman", fontsize=10)
     else:
         plt.xlim(1, 20.5)
         plt.xticks([x for x in range(0, 20)], [str(x+1) for x in range(0, 20)], fontname="Times New Roman", fontsize=10)
@@ -265,7 +311,6 @@ for metric, title, ylabel in plot_metrics:
             plt.ylim(0, 55)
             plt.yticks(np.arange(0, 56, 5), fontname="Times New Roman", fontsize=10)
         elif metric == "val_recon_loss":
-            # Expand y-axis range to include all recon loss values up to 1000 for visibility
             plt.ylim(550, 1000)
             plt.yticks(np.arange(550, 1001, 50), fontname="Times New Roman", fontsize=10)
     plt.grid(axis='y', color='gray', alpha=0.08, linewidth=1, linestyle='-')
@@ -293,11 +338,26 @@ for dataset, group in elbo_grouped.items():
         all_epochs = sorted(int(e) for e in all_epochs)
         all_epochs_combined.update(all_epochs)
         means = []
-        for e in all_epochs:
-            vrl = metrics_dict['val_recon_loss'].get(e, (np.nan,))[0]
-            vkl = metrics_dict['val_kl_loss'].get(e, (np.nan,))[0]
-            means.append(vrl + vkl if not np.isnan(vrl) and not np.isnan(vkl) else np.nan)
-        # Compose label for line
+        stds = []
+        ns = []
+        if 'elbo' in metrics_dict:
+            for e in all_epochs:
+                if e in metrics_dict['elbo']:
+                    mean, std, n = metrics_dict['elbo'][e]
+                    means.append(mean)
+                    stds.append(std)
+                    ns.append(n)
+                else:
+                    means.append(np.nan)
+                    stds.append(np.nan)
+                    ns.append(0)
+        else:
+            for e in all_epochs:
+                vrl = metrics_dict['val_recon_loss'].get(e, (np.nan,))[0]
+                vkl = metrics_dict['val_kl_loss'].get(e, (np.nan,))[0]
+                means.append(vrl + vkl if not np.isnan(vrl) and not np.isnan(vkl) else np.nan)
+                stds.append(np.nan)
+                ns.append(0)
         def beta_fmt(val):
             return f"{val:.1f}" if 0 < val < 1 else f"{int(round(val))}"
         beta_start_fmt = beta_fmt(beta_start)
@@ -316,8 +376,24 @@ for dataset, group in elbo_grouped.items():
                 if not np.isnan(means[i]):
                     plt.text(all_epochs[i] + 0.2, means[i], f"{means[i]:.2f}", color=color, fontsize=8, fontname='Times New Roman', va='center', ha='left', weight='bold', bbox=dict(facecolor='white', edgecolor='none', alpha=0.7, pad=0.5))
                     break
+        # Print stats for final epoch using pre-computed values
+        if all_epochs:
+            final_epoch = max(all_epochs)
+            final_idx = all_epochs.index(final_epoch)
+            
+            if final_idx < len(means) and not np.isnan(means[final_idx]):
+                mean = means[final_idx]
+                std = stds[final_idx] if final_idx < len(stds) else 0.0
+                n = ns[final_idx] if final_idx < len(ns) else 0
+                
+                if n > 1:
+                    se = std / np.sqrt(n)
+                    print(f"[DEBUG] {label} | Epoch {final_epoch} | final_y={means[final_idx]:.4f} | mean={mean:.4f}")
+                    print(f"[{label}] Epoch {final_epoch}: mean={mean:.4f}, std={std:.4f}, n={n}, SE={se:.4f}")
+                else:
+                    print(f"[{label}] Epoch {final_epoch}: mean={mean:.4f}, std={std:.4f}, n={n}, SE=NA (n<=1)")
+                
         plotted = True
-    # Set x-axis ticks based on epochs present in this dataset
     if all_epochs_combined:
         min_epoch = min(all_epochs_combined)
         max_epoch = max(all_epochs_combined)
@@ -330,10 +406,10 @@ for dataset, group in elbo_grouped.items():
         plt.xlabel('Epoch', fontname='Times New Roman', fontsize=12)
         plt.ylabel('Negative ELBO = Reconstruction loss + KL loss', fontname='Times New Roman', fontsize=12)
         if DATASET_FILTER == "dsprites":
-            plt.xlim(1, 10.5)
-            plt.xticks([x for x in range(1, 11)], [str(x) for x in range(1, 11)], fontname='Times New Roman', fontsize=10)
-            plt.ylim(40, 200)
-            plt.yticks(np.arange(40, 201, 20), fontname='Times New Roman', fontsize=10)
+            plt.xlim(0, 10)
+            plt.xticks([x for x in range(0, 10)], [str(x+1) for x in range(0, 10)], fontname='Times New Roman', fontsize=10)  # Label as 1-10
+            plt.ylim(0, 140)
+            plt.yticks(np.arange(0, 141, 20), fontname='Times New Roman', fontsize=10)
         else:
             plt.xlim(1, 20.5)
             plt.xticks([x for x in range(0, 20)], [str(x+1) for x in range(0, 20)], fontname='Times New Roman', fontsize=10)
